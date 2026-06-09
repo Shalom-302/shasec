@@ -1,0 +1,37 @@
+# Version control
+.git
+.gitignore
+.gitlab-ci.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Env & secrets
+.env
+.env.*
+!.env.template
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local data & build artifacts
+*.db
+*.sqlite3
+dist/
+build/
+node_modules/
+*.log
+
+# Docs / CI assets not needed in image
+.github/
+docs/
+README.md

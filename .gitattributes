@@ -1,0 +1,12 @@
+# Normalize line endings to LF in the repository (Linux/Docker target)
+* text=auto eol=lf
+
+# Shell scripts MUST keep LF or they break inside Linux containers
+*.sh text eol=lf
+
+# Binary assets (never normalize)
+*.png binary
+*.jpg binary
+*.ico binary
+*.xdb binary
+*.db binary

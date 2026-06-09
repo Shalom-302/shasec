@@ -1,0 +1,85 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: monshaapi:latest
+    container_name: monshaapi_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Point the app at the compose service names (overrides .env localhost)
+      - POSTGRES_HOST=monshaapi_postgres
+      - REDIS_HOST=monshaapi_redis
+      - MINIO_ENDPOINT=monshaapi_minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - monshaapi
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: monshaapi_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DATABASE:-monshaapi}
+    volumes:
+      - monshaapi_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DATABASE:-monshaapi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - monshaapi
+
+  redis:
+    image: redis:7-alpine
+    container_name: monshaapi_redis
+    restart: unless-stopped
+    volumes:
+      - monshaapi_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - monshaapi
+
+  minio:
+    image: minio/minio:latest
+    container_name: monshaapi_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - monshaapi_minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - monshaapi
+
+volumes:
+  monshaapi_postgres:
+  monshaapi_redis:
+  monshaapi_minio:
+
+networks:
+  monshaapi:
+    driver: bridge

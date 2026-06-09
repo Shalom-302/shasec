@@ -1,0 +1,25 @@
+# Development overrides — automatically applied by `docker compose up`
+# (i.e. `monshaapi up`, dev mode). Two conveniences that must NOT exist in prod:
+#
+#   1. Bind-mount the source so code changes hot-reload (uvicorn --reload)
+#      WITHOUT rebuilding the image. The venv lives at /opt/venv, so it is not
+#      shadowed.
+#   2. Publish the Postgres / MinIO ports on the host for local tooling
+#      (psql, DBeaver, the MinIO console at :9001).
+#
+# The base file keeps these datastores UNPUBLISHED, so production
+# (`monshaapi up --prod`, which does NOT load this file) never exposes 5432 / 9000
+# to the outside world.
+services:
+  api:
+    volumes:
+      - .:/app
+
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
