@@ -82,4 +82,6 @@ private:
     int     m_currentScan = -1;
     QHash<int, QString> m_targetUrl;   // target_id -> url
     QHash<int, QString> m_targetType;  // target_id -> type
+    QJsonArray m_findingsData;         // raw findings (for the detail dialog)
+    QJsonArray m_exploitsData;         // raw exploits (for the detail dialog)
 };

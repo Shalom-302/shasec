@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
+#include <QDialog>
 #include <QDir>
 #include <QFile>
 #include <QFrame>
@@ -24,6 +25,7 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -51,6 +53,68 @@ static QTableWidget* makeTable(const QStringList& headers)
     t->setSelectionBehavior(QAbstractItemView::SelectRows);
     t->verticalHeader()->setVisible(false);
     return t;
+}
+
+static QString severityMeaning(const QString& s)
+{
+    if (s == QStringLiteral("critical")) return QStringLiteral("🔴 Critique — exploitable, impact majeur. Priorité absolue.");
+    if (s == QStringLiteral("high")) return QStringLiteral("🔴 Élevé — risque important, à corriger vite.");
+    if (s == QStringLiteral("medium")) return QStringLiteral("🟠 Moyen — à corriger.");
+    if (s == QStringLiteral("low")) return QStringLiteral("🔵 Faible — durcissement / hygiène.");
+    return QStringLiteral("⚪ Info — informatif, pas une faille en soi.");
+}
+
+static QString esc(const QString& s) { return s.toHtmlEscaped(); }
+
+static void showDetailDialog(QWidget* parent, const QString& title, const QString& html)
+{
+    QDialog dlg(parent);
+    dlg.setWindowTitle(title);
+    dlg.resize(660, 480);
+    auto* v = new QVBoxLayout(&dlg);
+    auto* br = new QTextBrowser(&dlg);
+    br->setOpenExternalLinks(true);
+    br->setHtml(html);
+    v->addWidget(br);
+    auto* close = new QPushButton(QStringLiteral("Fermer"), &dlg);
+    QObject::connect(close, &QPushButton::clicked, &dlg, &QDialog::accept);
+    v->addWidget(close, 0, Qt::AlignRight);
+    dlg.exec();
+}
+
+static void showFindingDetail(QWidget* parent, const QJsonObject& f)
+{
+    QString h = QStringLiteral("<h3>%1</h3>").arg(esc(f.value(QStringLiteral("title")).toString()));
+    h += QStringLiteral("<p><b>Sévérité :</b> %1</p>").arg(severityMeaning(f.value(QStringLiteral("severity")).toString()));
+    h += QStringLiteral("<p><b>Détecté par :</b> %1</p>").arg(esc(f.value(QStringLiteral("plugin")).toString()));
+    const QString d = f.value(QStringLiteral("description")).toString();
+    if (!d.isEmpty()) h += QStringLiteral("<p><b>Ce que c'est :</b><br>%1</p>").arg(esc(d));
+    const QString ev = f.value(QStringLiteral("evidence")).toString();
+    if (!ev.isEmpty()) h += QStringLiteral("<p><b>Preuve :</b><br><code>%1</code></p>").arg(esc(ev));
+    const QString rec = f.value(QStringLiteral("recommendation")).toString();
+    if (!rec.isEmpty()) h += QStringLiteral("<p><b>✅ Comment corriger :</b><br>%1</p>").arg(esc(rec));
+    showDetailDialog(parent, QStringLiteral("Détail du finding"), h);
+}
+
+static void showExploitDetail(QWidget* parent, const QJsonObject& e)
+{
+    QString h = QStringLiteral("<h3>%1</h3>").arg(esc(e.value(QStringLiteral("title")).toString()));
+    h += QStringLiteral("<p><b>Sévérité :</b> %1</p>").arg(severityMeaning(e.value(QStringLiteral("severity")).toString()));
+    h += QStringLiteral("<p><b>Statut :</b> %1</p>").arg(
+        e.value(QStringLiteral("confirmed")).toBool()
+            ? QStringLiteral("✔ <span style='color:#15803d'>CONFIRMÉ</span> — faille prouvée")
+            : QStringLiteral("non confirmé — à vérifier à l'œil"));
+    h += QStringLiteral("<p><b>Type :</b> %1 · module %2</p>")
+             .arg(esc(e.value(QStringLiteral("category")).toString()), esc(e.value(QStringLiteral("module")).toString()));
+    const QString imp = e.value(QStringLiteral("impact")).toString();
+    if (!imp.isEmpty()) h += QStringLiteral("<p><b>Impact :</b><br>%1</p>").arg(esc(imp));
+    const QString req = e.value(QStringLiteral("request")).toString();
+    if (!req.isEmpty())
+        h += QStringLiteral("<p><b>Requête envoyée :</b></p><pre style='background:#0f1626;color:#cdd6e4;padding:8px;border-radius:6px'>%1</pre>").arg(esc(req));
+    const QString resp = e.value(QStringLiteral("response")).toString();
+    if (!resp.isEmpty())
+        h += QStringLiteral("<p><b>Réponse (la preuve) :</b></p><pre style='background:#0f1626;color:#cdd6e4;padding:8px;border-radius:6px'>%1</pre>").arg(esc(resp));
+    showDetailDialog(parent, QStringLiteral("Détail de la preuve"), h);
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -331,12 +395,30 @@ QWidget* MainWindow::buildScans()
     m_scanStatus = new QLabel(page);
     v->addWidget(m_scanStatus);
 
+    auto* legend = new QLabel(QStringLiteral(
+        "<b>Findings</b> = problèmes potentiels repérés · <b>Preuves</b> = failles réellement "
+        "exploitées. <b>Double-clique</b> une ligne → cause + preuve + comment corriger."));
+    legend->setStyleSheet(QStringLiteral("color:#8b93a6"));
+    legend->setWordWrap(true);
+    v->addWidget(legend);
+
     m_detailTabs = new QTabWidget(page);
     m_findings = makeTable({"Sévérité", "Titre", "Scanner", "Description"});
     m_exploits = makeTable({"Sévérité", "Confirmé", "Catégorie", "Module", "Titre", "Impact"});
-    m_detailTabs->addTab(m_findings, QStringLiteral("Findings"));
-    m_detailTabs->addTab(m_exploits, QStringLiteral("Preuves"));
+    m_detailTabs->addTab(m_findings, QStringLiteral("Findings (problèmes)"));
+    m_detailTabs->addTab(m_exploits, QStringLiteral("Preuves (failles prouvées)"));
     v->addWidget(m_detailTabs, 1);
+
+    connect(m_findings, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem* it) {
+        const int r = it->row();
+        if (r >= 0 && r < m_findingsData.size())
+            showFindingDetail(this, m_findingsData.at(r).toObject());
+    });
+    connect(m_exploits, &QTableWidget::itemDoubleClicked, this, [this](QTableWidgetItem* it) {
+        const int r = it->row();
+        if (r >= 0 && r < m_exploitsData.size())
+            showExploitDetail(this, m_exploitsData.at(r).toObject());
+    });
 
     connect(m_scanBtn, &QPushButton::clicked, this, [this]() {
         if (m_scanUrl->text().trimmed().isEmpty()) {
@@ -587,6 +669,7 @@ void MainWindow::fillScans(const QJsonArray& scans)
 
 void MainWindow::fillFindings(const QJsonArray& findings)
 {
+    m_findingsData = findings;
     m_findings->setRowCount(0);
     for (const auto& v : findings) {
         const QJsonObject f = v.toObject();
@@ -603,6 +686,7 @@ void MainWindow::fillFindings(const QJsonArray& findings)
 
 void MainWindow::fillExploits(const QJsonArray& exploits)
 {
+    m_exploitsData = exploits;
     m_exploits->setRowCount(0);
     int confirmed = 0;
     for (const auto& v : exploits) {
