@@ -42,8 +42,10 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
-      # Durable scans: enqueue to the arq worker below. Set false to run in-process.
-      - SHASEC_USE_ARQ=${SHASEC_USE_ARQ:-true}
+      # Durable scans: enqueue to the arq worker. Default OFF so the API always
+      # works in-process (scans never hang); set true ONLY once the worker is
+      # confirmed running (fresh image that contains arq).
+      - SHASEC_USE_ARQ=${SHASEC_USE_ARQ:-false}
       # OWASP ZAP (the `zap` service below); active scan is opt-in (heavy/intrusive).
       - ZAP_ENDPOINT=http://zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
@@ -88,7 +90,9 @@ services:
       - ZAP_ENDPOINT=http://zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
       - ZAP_ACTIVE_SCAN=${ZAP_ACTIVE_SCAN:-false}
-    entrypoint: ["arq", "backend.app.shasec.worker.WorkerSettings"]
+    # Wrapped in sh -c so a missing 'arq' (stale image) only restart-loops this
+    # one container instead of failing `docker compose up` for the whole stack.
+    entrypoint: ["sh", "-c", "exec arq backend.app.shasec.worker.WorkerSettings"]
     depends_on:
       postgres:
         condition: service_healthy
