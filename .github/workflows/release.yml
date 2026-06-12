@@ -1,0 +1,79 @@
+name: Release desktop client
+
+# On a version tag (e.g. v0.1.0) build the Qt client for Windows AND macOS,
+# then publish a GitHub Release with both downloads attached.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# → Releases page gets shasec-client-windows.zip + shasec-client.dmg
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtwebsockets'
+          cache: true
+      - name: Build
+        working-directory: qt-client
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+      - name: Deploy + zip
+        working-directory: qt-client
+        shell: pwsh
+        run: |
+          windeployqt --release --compiler-runtime build\Release\shasec-client.exe
+          Compress-Archive -Path build\Release\* -DestinationPath shasec-client-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shasec-client-windows
+          path: qt-client/shasec-client-windows.zip
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          modules: 'qtwebsockets'
+          cache: true
+      - name: Build + bundle
+        working-directory: qt-client
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          macdeployqt build/shasec-client.app -dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shasec-client-macos
+          path: qt-client/build/shasec-client.dmg
+          if-no-files-found: error
+
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/shasec-client-windows/shasec-client-windows.zip
+            dist/shasec-client-macos/shasec-client.dmg
+          generate_release_notes: true
