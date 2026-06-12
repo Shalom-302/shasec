@@ -44,6 +44,10 @@ services:
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
       # Durable scans: enqueue to the arq worker below. Set false to run in-process.
       - SHASEC_USE_ARQ=${SHASEC_USE_ARQ:-true}
+      # OWASP ZAP (the `zap` service below); active scan is opt-in (heavy/intrusive).
+      - ZAP_ENDPOINT=http://zap:8090
+      - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
+      - ZAP_ACTIVE_SCAN=${ZAP_ACTIVE_SCAN:-false}
     # Dokploy/Traefik routes the public domain to this container port.
     expose:
       - "8000"
@@ -81,6 +85,9 @@ services:
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
       - SHASEC_USE_ARQ=true
+      - ZAP_ENDPOINT=http://zap:8090
+      - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
+      - ZAP_ACTIVE_SCAN=${ZAP_ACTIVE_SCAN:-false}
     entrypoint: ["arq", "backend.app.shasec.worker.WorkerSettings"]
     depends_on:
       postgres:
@@ -128,6 +135,19 @@ services:
       - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-shasec_minio_changeme}
     volumes:
       - miniodata:/data
+    networks: [shasec]
+
+  # OWASP ZAP daemon — spider + passive scan on every scan; active scan is opt-in
+  # (ZAP_ACTIVE_SCAN=true on api/worker). Heavy (~1.5 GB Java): delete this service
+  # if your VPS is small — the zap plugin then just skips cleanly (an INFO finding).
+  zap:
+    image: zaproxy/zap-stable
+    restart: unless-stopped
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8090
+      -config api.key=${ZAP_API_KEY:-shasec-zap}
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
     networks: [shasec]
 
 volumes:

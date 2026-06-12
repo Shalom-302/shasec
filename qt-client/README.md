@@ -35,14 +35,34 @@ cmake --build build --config Release
 ```
 
 Exemples de `CMAKE_PREFIX_PATH` :
-- Windows (MinGW) : `C:/Qt/6.7.2/mingw_64`
-- Windows (MSVC)  : `C:/Qt/6.7.2/msvc2019_64`
-- Linux           : `~/Qt/6.7.2/gcc_64`
+- Windows (MinGW) : `C:/Qt/6.8.0/mingw_64`
+- Windows (MSVC)  : `C:/Qt/6.8.0/msvc2019_64`
+- macOS           : `~/Qt/6.8.0/macos`
+- Linux           : `~/Qt/6.8.0/gcc_64`
 
-Le binaire `shasec-client` est généré dans `build/`.
+## Packaging (distribuable, double-clic)
 
-> Windows : si l'exe ne trouve pas les DLL Qt au lancement, exécute
-> `windeployqt build/shasec-client.exe` (livré avec Qt) pour copier les DLL.
+### Windows → `.exe` portable
+```bat
+cmake --build build --config Release
+windeployqt build\shasec-client.exe
+```
+`windeployqt` copie les DLL Qt à côté de l'exe. Zippe le dossier `build\` → exécutable
+sur n'importe quel Windows (sans Qt installé).
+
+### macOS → `.app`
+Le même code produit un bundle `shasec-client.app` (CMake `MACOSX_BUNDLE`). Pour
+embarquer les frameworks Qt :
+```bash
+cmake -B build -S . -DCMAKE_PREFIX_PATH=~/Qt/6.8.0/macos
+cmake --build build
+macdeployqt build/shasec-client.app          # bundle les frameworks
+# (optionnel) macdeployqt build/shasec-client.app -dmg   # produit un .dmg
+```
+`shasec-client.app` est alors distribuable (glisser dans /Applications).
+
+> Le plus simple sur les deux OS : ouvrir le `CMakeLists.txt` dans **Qt Creator** et
+> faire *Build* en mode **Release**.
 
 ## Fichiers
 

@@ -15,3 +15,11 @@ qt_add_executable(shasec-client
 )
 
 target_link_libraries(shasec-client PRIVATE Qt6::Widgets Qt6::Network)
+
+# GUI app: no console window on Windows; a proper .app bundle on macOS.
+set_target_properties(shasec-client PROPERTIES
+    WIN32_EXECUTABLE TRUE
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "SHASEC Console"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "dev.kortexai.shasec.client"
+)
