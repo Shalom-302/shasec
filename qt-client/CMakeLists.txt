@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network WebSockets)
 qt_standard_project_setup()
 
 qt_add_executable(shasec-client
@@ -14,7 +14,7 @@ qt_add_executable(shasec-client
     MainWindow.h  MainWindow.cpp
 )
 
-target_link_libraries(shasec-client PRIVATE Qt6::Widgets Qt6::Network)
+target_link_libraries(shasec-client PRIVATE Qt6::Widgets Qt6::Network Qt6::WebSockets)
 
 # GUI app: no console window on Windows; a proper .app bundle on macOS.
 set_target_properties(shasec-client PROPERTIES

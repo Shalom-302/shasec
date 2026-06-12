@@ -10,6 +10,7 @@
 #include <functional>
 
 class QNetworkReply;
+class QWebSocket;
 
 // Thin REST client for the SHASEC API. Wraps the {code,msg,data} envelope and
 // Bearer auth. Each call emits a typed signal on success or error() on failure.
@@ -42,6 +43,8 @@ public:
     void generateReport(int id, const QString& format);
     void downloadReport(int id, const QString& format);
 
+    void openScanSocket(int id);   // live progress over WebSocket
+
 signals:
     void loggedIn(const QString& email);
     void registered(const QString& email);
@@ -58,13 +61,16 @@ signals:
     void targetDeleted();
     void reportReady(const QString& location);
     void reportDownloaded(const QByteArray& data, const QString& filename);
+    void progress(int id, const QString& event, const QString& message);
     void error(const QString& message);
 
 private:
     QNetworkRequest jsonRequest(const QString& path) const;
     void handle(QNetworkReply* reply, const std::function<void(const QJsonValue&)>& onOk);
+    QString wsUrl(int id) const;
 
     QNetworkAccessManager m_nam;
+    QWebSocket* m_ws = nullptr;
     QString m_baseUrl;
     QString m_token;
 };

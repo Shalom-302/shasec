@@ -93,7 +93,9 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(m_sidebar, &QListWidget::currentRowChanged, m_stack, &QStackedWidget::setCurrentIndex);
 
-    m_poll->setInterval(4000);
+    // WebSocket is primary for live progress; this slow poll is only a backstop
+    // in case the socket drops.
+    m_poll->setInterval(15000);
     connect(m_poll, &QTimer::timeout, this, [this]() {
         if (m_currentScan > 0)
             m_api->getScan(m_currentScan);
@@ -119,7 +121,14 @@ MainWindow::MainWindow(QWidget* parent)
         m_currentScan = id;
         m_scanStatus->setText(QStringLiteral("Scan #%1 : %2…").arg(id).arg(s));
         statusBar()->showMessage(QStringLiteral("Scan #%1 lancé").arg(id));
-        m_poll->start();
+        m_api->openScanSocket(id);  // live progress
+        m_poll->start();            // backstop
+    });
+    connect(m_api, &ApiClient::progress, this, [this](int id, const QString& event, const QString& msg) {
+        if (id != m_currentScan)
+            return;
+        m_scanStatus->setText(QStringLiteral("Scan #%1 · %2  %3").arg(id).arg(event).arg(msg));
+        statusBar()->showMessage(QStringLiteral("%1 — %2").arg(event, msg));
     });
     connect(m_api, &ApiClient::scanStatus, this, [this](int id, const QString& s) {
         m_scanStatus->setText(QStringLiteral("Scan #%1 : %2").arg(id).arg(s));

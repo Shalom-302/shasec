@@ -6,6 +6,7 @@ from backend.app.shasec.plugins.base import RawFinding, ScanContext
 from backend.app.shasec.schema.exploit import CreateExploitParam
 from backend.app.shasec.schema.finding import CreateFindingParam
 from backend.app.shasec.service.ai_service import ai_service
+from backend.app.shasec.service.progress import publish as publish_progress
 from backend.app.shasec.verifier import get_modules_for
 from backend.app.shasec.verifier.base import ExploitContext
 from backend.common.enums import SEVERITY_WEIGHT, ScanStatus
@@ -94,21 +95,26 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
         await scan_dao.update(
             db, scan_id, {'status': ScanStatus.running.value, 'started_at': timezone.now()}
         )
+    await publish_progress(scan_id, 'started', message=f'Scan de {target.url} démarré')
 
     try:
         ctx = ScanContext(scan_id=scan_id, target_url=target.url, target_type=target.type)
         plugins = get_plugins_for(target.type)
+        await publish_progress(scan_id, 'scanners.start', message=f'{len(plugins)} scanner(s)', total=len(plugins))
 
         async def _safe_run(p):
             try:
-                return p.name, await asyncio.wait_for(p.run(ctx), timeout=p.timeout + 5)
+                result = p.name, await asyncio.wait_for(p.run(ctx), timeout=p.timeout + 5)
             except Exception as exc:  # noqa: BLE001  — one plugin must never kill the scan
                 log.error(f'shasec plugin {p.name} failed on scan {scan_id}: {exc}')
-                return p.name, []
+                result = p.name, []
+            await publish_progress(scan_id, 'plugin.done', message=p.name)
+            return result
 
         results = await asyncio.gather(*[_safe_run(p) for p in plugins])
         tagged = [(name, rf) for name, rfs in results for rf in rfs]
         aggregated = _aggregate(target.url, tagged)
+        await publish_progress(scan_id, 'scanners.done', message=f'{len(aggregated)} finding(s)', count=len(aggregated))
 
         async with async_db_session.begin() as db:
             for plugin_name, rf, fp in aggregated:
@@ -130,21 +136,27 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
         # AND an authorized target. Sends attack payloads (still read-only/bounded)
         # and records each request/response as proof.
         if scan.allow_active_exploitation and target.is_authorized:
+            await publish_progress(scan_id, 'exploit.start', message='Exploitation active…')
             await _run_exploit_stage(scan_id, target.url, target.type, auth_token)
+            await publish_progress(scan_id, 'exploit.done', message='Preuves collectées')
 
         # AI analysis stage (Phase 3) — interprets the findings + proofs into a
         # score/summary/remediation. Best-effort: skips with no API key, never
         # fails the scan.
         if settings.AI_ANALYSIS_ENABLED:
+            await publish_progress(scan_id, 'ai.start', message='Analyse IA…')
             await ai_service.analyze_scan(scan_id)
+            await publish_progress(scan_id, 'ai.done', message='Analyse IA terminée')
 
         async with async_db_session.begin() as db:
             await scan_dao.update(
                 db, scan_id, {'status': ScanStatus.completed.value, 'completed_at': timezone.now()}
             )
+        await publish_progress(scan_id, 'completed', status='completed', message='Terminé')
         log.info(f'shasec scan {scan_id} completed: {len(aggregated)} finding(s)')
     except Exception as exc:  # noqa: BLE001
         log.error(f'shasec scan {scan_id} failed: {exc}')
+        await publish_progress(scan_id, 'failed', status='failed', message=str(exc)[:200])
         async with async_db_session.begin() as db:
             await scan_dao.update(
                 db,

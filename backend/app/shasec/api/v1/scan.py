@@ -1,14 +1,18 @@
+import json
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request, Response
+from fastapi import APIRouter, Path, Query, Request, Response, WebSocket
 
 from backend.app.shasec.schema.ai_analysis import GetAIAnalysisDetails
 from backend.app.shasec.schema.finding import GetFindingDetails
 from backend.app.shasec.schema.report import GetReportDetails
 from backend.app.shasec.schema.scan import CreateScanParam, GetScanDetails, QuickScanParam
 from backend.app.shasec.service.finding_service import finding_service
+from backend.app.shasec.service.progress import channel as progress_channel
 from backend.app.shasec.service.report_service import report_service
 from backend.app.shasec.service.scan_service import scan_service
+from backend.common.security.jwt import jwt_decode
+from backend.database.db_redis import redis_client
 from backend.common.pagination import DependsPagination, paging_data
 from backend.common.response.response_schema import ResponseModel, response_base
 from backend.common.security.jwt import DependsJwtAuth
@@ -125,6 +129,41 @@ async def download_scan_report(
         media_type=mime,
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+@router.websocket('/{pk}/ws')
+async def scan_progress_ws(websocket: WebSocket, pk: Annotated[int, Path(...)]) -> None:
+    """Live scan progress. WebSockets can't carry the HTTP bearer dependency, so
+    the JWT is passed as ?token= and validated here. Forwards Redis pub/sub events
+    (published by the pipeline) until the scan completes or the client disconnects.
+    """
+    try:
+        jwt_decode(websocket.query_params.get('token', ''))
+    except Exception:  # noqa: BLE001 — invalid/absent token
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe(progress_channel(pk))
+    try:
+        async for msg in pubsub.listen():
+            if msg.get('type') != 'message':
+                continue
+            await websocket.send_text(msg['data'])
+            try:
+                if json.loads(msg['data']).get('event') in ('completed', 'failed'):
+                    break
+            except (ValueError, TypeError):
+                pass
+    except Exception:  # noqa: BLE001 — client disconnect / transport error
+        pass
+    finally:
+        try:
+            await pubsub.unsubscribe(progress_channel(pk))
+            await pubsub.aclose()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @router.get('/{pk}/exploits', summary='Get scan exploit proofs', dependencies=[DependsJwtAuth])

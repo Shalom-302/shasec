@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QUrl>
+#include <QWebSocket>
 
 ApiClient::ApiClient(QObject* parent)
     : QObject(parent)
@@ -199,6 +200,36 @@ void ApiClient::generateReport(int id, const QString& format)
             emit reportReady(data.toObject().value(QStringLiteral("location")).toString());
         });
     });
+}
+
+QString ApiClient::wsUrl(int id) const
+{
+    QString u = m_baseUrl;
+    if (u.startsWith(QStringLiteral("https")))
+        u.replace(0, 5, QStringLiteral("wss"));
+    else if (u.startsWith(QStringLiteral("http")))
+        u.replace(0, 4, QStringLiteral("ws"));
+    return QStringLiteral("%1/scans/%2/ws?token=%3").arg(u).arg(id).arg(m_token);
+}
+
+void ApiClient::openScanSocket(int id)
+{
+    if (!m_ws) {
+        m_ws = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
+        connect(m_ws, &QWebSocket::textMessageReceived, this, [this](const QString& text) {
+            const QJsonObject o = QJsonDocument::fromJson(text.toUtf8()).object();
+            const int sid = o.value(QStringLiteral("scan_id")).toInt();
+            const QString event = o.value(QStringLiteral("event")).toString();
+            emit progress(sid, event, o.value(QStringLiteral("message")).toString());
+            if (event == QStringLiteral("completed") || event == QStringLiteral("failed")) {
+                emit scanStatus(sid, event);  // reuse the existing completion path
+                m_ws->close();
+            }
+        });
+    } else {
+        m_ws->close();
+    }
+    m_ws->open(QUrl(wsUrl(id)));
 }
 
 void ApiClient::downloadReport(int id, const QString& format)

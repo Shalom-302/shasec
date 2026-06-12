@@ -18,7 +18,7 @@ Navigation à gauche : **Dashboard / Cibles / Scans / Rapports / Réglages**.
 
 ## Prérequis
 
-- **Qt 6.3+** (Widgets + Network)
+- **Qt 6.3+** (Widgets + Network + WebSockets)
 - **CMake 3.16+** et un compilateur C++17 (MSVC, MinGW, ou GCC/Clang)
 
 ## Build
