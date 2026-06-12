@@ -148,6 +148,22 @@ void ApiClient::getExploits(int id)
     });
 }
 
+void ApiClient::getAnalysis(int id)
+{
+    QNetworkReply* reply = m_nam.get(jsonRequest(QStringLiteral("/scans/%1/analysis").arg(id)));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handle(reply, [this](const QJsonValue& data) { emit analysisReady(data.toObject()); });
+    });
+}
+
+void ApiClient::cancelScan(int id)
+{
+    QNetworkReply* reply = m_nam.post(jsonRequest(QStringLiteral("/scans/%1/cancel").arg(id)), QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handle(reply, [this](const QJsonValue&) { emit scanCancelled(); });
+    });
+}
+
 void ApiClient::authorizeTarget(int id, bool authorized)
 {
     QJsonObject payload{{"is_authorized", authorized}};

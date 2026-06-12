@@ -4,6 +4,7 @@
 #include <QString>
 #include <QByteArray>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QJsonValue>
 #include <QNetworkAccessManager>
 #include <functional>
@@ -32,6 +33,8 @@ public:
     void getScan(int id);
     void getFindings(int id);
     void getExploits(int id);
+    void getAnalysis(int id);
+    void cancelScan(int id);
     void authorizeTarget(int id, bool authorized);
 
     void generateReport(int id, const QString& format);
@@ -46,6 +49,8 @@ signals:
     void scanStatus(int id, const QString& status);
     void findingsReady(const QJsonArray& findings);
     void exploitsReady(const QJsonArray& exploits);
+    void analysisReady(const QJsonObject& analysis);
+    void scanCancelled();
     void targetAuthorized();
     void reportReady(const QString& location);
     void reportDownloaded(const QByteArray& data, const QString& filename);

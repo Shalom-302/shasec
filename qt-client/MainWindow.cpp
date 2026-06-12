@@ -2,6 +2,7 @@
 #include "ApiClient.h"
 
 #include <QAbstractItemView>
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
@@ -15,6 +16,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -130,6 +133,28 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_api, &ApiClient::findingsReady, this, &MainWindow::fillFindings);
     connect(m_api, &ApiClient::exploitsReady, this, &MainWindow::fillExploits);
     connect(m_api, &ApiClient::targetAuthorized, this, [this]() { refreshData(); });
+    connect(m_api, &ApiClient::analysisReady, this, [this](const QJsonObject& a) {
+        if (a.isEmpty()) {
+            QMessageBox::information(this, QStringLiteral("Analyse IA"),
+                QStringLiteral("Pas d'analyse IA pour ce scan (clé DeepSeek absente, ou scan sans IA)."));
+            return;
+        }
+        QMessageBox box(this);
+        box.setWindowTitle(QStringLiteral("Analyse IA — DeepSeek"));
+        box.setIcon(QMessageBox::Information);
+        box.setText(QStringLiteral("Score : %1/100  (%2)\n\n%3")
+                        .arg(a.value(QStringLiteral("score")).toInt())
+                        .arg(a.value(QStringLiteral("provider")).toString())
+                        .arg(a.value(QStringLiteral("summary")).toString()));
+        box.setDetailedText(QStringLiteral("— IMPACTS —\n%1\n\n— RECOMMANDATIONS —\n%2")
+                                .arg(a.value(QStringLiteral("impacts")).toString())
+                                .arg(a.value(QStringLiteral("recommendations")).toString()));
+        box.exec();
+    });
+    connect(m_api, &ApiClient::scanCancelled, this, [this]() {
+        statusBar()->showMessage(QStringLiteral("Scan annulé"));
+        refreshData();
+    });
     connect(m_api, &ApiClient::reportReady, this, [this](const QString& loc) {
         m_reportInfo->setText(QStringLiteral("Stocké : %1").arg(loc));
     });
@@ -258,6 +283,48 @@ QWidget* MainWindow::buildScans()
         const int id = m_scansTable->item(row, 0)->data(Qt::UserRole).toInt();
         if (id > 0)
             selectScan(id, m_scansTable->item(row, 1)->text());
+    });
+
+    // Right-click context menu (admin-style actions on a scan)
+    m_scansTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_scansTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QTableWidgetItem* it = m_scansTable->itemAt(pos);
+        if (!it)
+            return;
+        const int row = it->row();
+        const int id = m_scansTable->item(row, 0)->data(Qt::UserRole).toInt();
+        if (id <= 0)
+            return;
+        const QString url = m_scansTable->item(row, 1)->text();
+        const QString type = m_scansTable->item(row, 2)->text();
+        const QString status = m_scansTable->item(row, 3)->text();
+
+        QMenu menu(this);
+        QAction* aDetails = menu.addAction(QStringLiteral("🔎  Voir détails (findings/preuves)"));
+        QAction* aReport = menu.addAction(QStringLiteral("📄  Générer le rapport"));
+        QAction* aAI = menu.addAction(QStringLiteral("🤖  Voir l'analyse IA"));
+        menu.addSeparator();
+        QAction* aRecon = menu.addAction(QStringLiteral("↻  Relancer (recon)"));
+        QAction* aExploit = menu.addAction(QStringLiteral("⚔  Relancer (exploitation active)"));
+        menu.addSeparator();
+        QAction* aCancel = menu.addAction(QStringLiteral("✖  Annuler le scan"));
+        aCancel->setEnabled(status == QStringLiteral("running") || status == QStringLiteral("pending"));
+
+        QAction* chosen = menu.exec(m_scansTable->viewport()->mapToGlobal(pos));
+        if (chosen == aDetails) {
+            selectScan(id, url);
+        } else if (chosen == aReport) {
+            selectScan(id, url);
+            m_sidebar->setCurrentRow(3);  // Rapports
+        } else if (chosen == aAI) {
+            m_api->getAnalysis(id);
+        } else if (chosen == aRecon) {
+            m_api->quickScan(url, type, false);
+        } else if (chosen == aExploit) {
+            m_api->quickScan(url, type, true);
+        } else if (chosen == aCancel) {
+            m_api->cancelScan(id);
+        }
     });
     return page;
 }
