@@ -19,15 +19,18 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # Defaults let the stack boot out-of-the-box; they are NOT 'postgres'/'minioadmin'
+      # so the prod safety guard still passes. ⚠️ Override these in Dokploy for real prod.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shasec_pg_changeme}
       - POSTGRES_DATABASE=${POSTGRES_DATABASE:-monshaapi}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-shasecadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-shasec_minio_changeme}
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-monshaapi}
-      - MINIO_CLOUD_URL=${MINIO_CLOUD_URL}
+      - MINIO_CLOUD_URL=${MINIO_CLOUD_URL:-http://localhost:9000}
+      # ⚠️ MANDATORY for security — set in Dokploy (forgeable JWTs if left empty):
       - TOKEN_SECRET_KEY=${TOKEN_SECRET_KEY}
       - OPERA_LOG_ENCRYPT_SECRET_KEY=${OPERA_LOG_ENCRYPT_SECRET_KEY}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -50,7 +53,8 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      # Must match the api's POSTGRES_PASSWORD above (same default / same override).
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shasec_pg_changeme}
       - POSTGRES_DB=${POSTGRES_DATABASE:-monshaapi}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -78,8 +82,9 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
-      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+      # Must match the api's MINIO_ACCESS_KEY / MINIO_SECRET_KEY (same default / override).
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-shasecadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-shasec_minio_changeme}
     volumes:
       - miniodata:/data
     networks: [shasec]

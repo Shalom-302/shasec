@@ -7,22 +7,49 @@ from backend.app.shasec.schema.target import CreateTargetParam
 from backend.app.shasec.service.orchestrator import run_pipeline
 from backend.common.enums import ScanStatus
 from backend.common.exception import errors
+from backend.common.log import log
+from backend.core.conf import settings
 from backend.crud.crud_scan import scan_dao
 from backend.crud.crud_target import target_dao
 from backend.database.db_postgres import async_db_session
 from backend.models import Scan
 
-# Keep strong references to in-flight pipeline tasks so the event loop does not
-# garbage-collect them mid-run (Phase 1 in-process execution; Phase 2 = arq).
+# Strong refs to in-flight in-process tasks (the fallback path) so the event loop
+# does not garbage-collect them mid-run.
 _RUNNING: set = set()
+_arq_pool = None
 
 
-def _fire(scan_id: int, auth_token: str | None = None) -> None:
-    # auth_token is passed transiently (never persisted) so authenticated
-    # exploit modules (JWT, BFLA) can use it.
+async def _get_arq_pool():
+    # Lazy import so the API boots even when arq isn't installed; only touched
+    # when SHASEC_USE_ARQ is on and a scan is dispatched.
+    global _arq_pool
+    if _arq_pool is None:
+        from arq import create_pool
+
+        from backend.app.shasec.worker import redis_settings
+        _arq_pool = await create_pool(redis_settings())
+    return _arq_pool
+
+
+def _run_in_process(scan_id: int, auth_token: str | None = None) -> None:
     task = asyncio.create_task(run_pipeline(scan_id, auth_token=auth_token))
     _RUNNING.add(task)
     task.add_done_callback(_RUNNING.discard)
+
+
+async def _dispatch(scan_id: int, auth_token: str | None = None) -> None:
+    """Durable execution via the arq worker when enabled; otherwise (or if the
+    queue is unreachable) run in-process. auth_token is passed transiently and
+    never persisted, so authenticated exploit modules (JWT, BFLA) can use it."""
+    if settings.SHASEC_USE_ARQ:
+        try:
+            pool = await _get_arq_pool()
+            await pool.enqueue_job('run_scan_job', scan_id, auth_token)
+            return
+        except Exception as exc:  # noqa: BLE001 — never block scan creation on the queue
+            log.warning(f'arq enqueue failed for scan {scan_id} ({exc}); running in-process')
+    _run_in_process(scan_id, auth_token=auth_token)
 
 
 class ScanService:
@@ -65,7 +92,7 @@ class ScanService:
                     msg='Target is not authorized for scanning. Authorize the target first.'
                 )
 
-        _fire(pk)
+        await _dispatch(pk)
 
         async with async_db_session() as db:
             return await scan_dao.get(db, pk)

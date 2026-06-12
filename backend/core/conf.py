@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     DEEPSEEK_MODEL: str = 'deepseek-chat'
     DEEPSEEK_TIMEOUT: int = 120
 
+    # shasec durability — when true, the scan pipeline is enqueued to an arq worker
+    # (Redis) instead of running in-process, so a scan survives an API restart. The
+    # worker container and the API must share this flag. Falls back to in-process if
+    # the queue can't be reached. Requires a running `arq ...worker.WorkerSettings`.
+    SHASEC_USE_ARQ: bool = False
+
     # SMTP / email (optional: leave blank to disable outgoing mail)
     SMTP_TLS: str = 'True'
     SMTP_PORT: str = '587'

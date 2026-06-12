@@ -45,6 +45,8 @@ dependencies = [
     "google-cloud-storage>=2.18.2",
     # Reporting — PDF rendering (needs Pango/Cairo system libs, installed in the Dockerfile)
     "weasyprint>=62.3",
+    # Durable background jobs (shasec scan pipeline runs in an arq worker)
+    "arq>=0.26.0",
     # Email
     "fastapi-mail>=1.4.1",
     # Request parsing / i18n helpers
