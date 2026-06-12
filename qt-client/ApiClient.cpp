@@ -4,7 +4,9 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QUrl>
+#ifdef SHASEC_HAS_WEBSOCKETS
 #include <QWebSocket>
+#endif
 
 ApiClient::ApiClient(QObject* parent)
     : QObject(parent)
@@ -202,6 +204,7 @@ void ApiClient::generateReport(int id, const QString& format)
     });
 }
 
+#ifdef SHASEC_HAS_WEBSOCKETS
 QString ApiClient::wsUrl(int id) const
 {
     QString u = m_baseUrl;
@@ -231,6 +234,12 @@ void ApiClient::openScanSocket(int id)
     }
     m_ws->open(QUrl(wsUrl(id)));
 }
+#else
+void ApiClient::openScanSocket(int id)
+{
+    Q_UNUSED(id);  // Qt WebSockets module absent — progress relies on polling.
+}
+#endif
 
 void ApiClient::downloadReport(int id, const QString& format)
 {

@@ -157,9 +157,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(m_sidebar, &QListWidget::currentRowChanged, m_stack, &QStackedWidget::setCurrentIndex);
 
-    // WebSocket is primary for live progress; this slow poll is only a backstop
-    // in case the socket drops.
-    m_poll->setInterval(15000);
+#ifdef SHASEC_HAS_WEBSOCKETS
+    m_poll->setInterval(15000);  // WebSocket is primary; this poll is just a backstop
+#else
+    m_poll->setInterval(4000);   // no WebSockets module — polling is the live mechanism
+#endif
     connect(m_poll, &QTimer::timeout, this, [this]() {
         if (m_currentScan > 0)
             m_api->getScan(m_currentScan);
