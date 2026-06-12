@@ -50,65 +50,89 @@ _HTML_TEMPLATE = jinja2.Template(
     """<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><title>Rapport d'audit — {{ target.name }}</title>
 <style>
- body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1a2332;margin:0;padding:40px;background:#fff}
- h1{font-size:26px;margin:0 0 4px} h2{font-size:18px;border-bottom:2px solid #e3e8ef;padding-bottom:6px;margin-top:34px}
- .muted{color:#6b7684;font-size:13px} .score{font-size:48px;font-weight:700}
- .grid{display:flex;gap:16px;margin:18px 0}
- .card{border:1px solid #e3e8ef;border-radius:10px;padding:16px 20px;flex:1}
- table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
- th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #eef1f5;vertical-align:top}
- th{background:#f7f9fc;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7684}
- .sev{font-weight:700;padding:2px 8px;border-radius:6px;font-size:11px;text-transform:uppercase}
- .critical{background:#fde8e8;color:#b91c1c}.high{background:#fef0e7;color:#c2410c}
- .medium{background:#fef9e7;color:#a16207}.low{background:#eef6fc;color:#1d6fb8}.info{background:#f1f3f5;color:#555}
- .proof{background:#0f1626;color:#cdd6e4;border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,monospace;
-   font-size:11.5px;white-space:pre-wrap;word-break:break-word;margin:6px 0}
- .ok{color:#15803d;font-weight:600} .tag{font-size:11px;color:#6b7684}
- footer{margin-top:40px;border-top:1px solid #e3e8ef;padding-top:12px;font-size:11px;color:#9aa4b2}
+ @page {
+   size: A4; margin: 16mm 15mm 18mm 15mm;
+   @bottom-left { content: "SHASEC · audit autorisé, borné et tracé"; font-size: 8pt; color: #9aa4b2; }
+   @bottom-right { content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #9aa4b2; }
+ }
+ * { box-sizing: border-box; }
+ body { font-family: "Segoe UI", Roboto, Helvetica, sans-serif; color: #1a2332; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+ h1 { font-size: 21pt; margin: 0; letter-spacing: -.3px; }
+ h2 { font-size: 13.5pt; color: #11203a; border-bottom: 2px solid #e3e8ef; padding-bottom: 5px; margin: 24px 0 10px; }
+ h3 { font-size: 11pt; margin: 12px 0 3px; color: #11203a; }
+ p { margin: 6px 0; }
+
+ .cover { background: #14233f; color: #fff; border-radius: 12px; padding: 22px 26px; }
+ .cover .target { font-size: 12.5pt; font-weight: 600; color: #eaf1ff; margin-top: 6px; }
+ .cover .sub { color: #aebfda; font-size: 9.5pt; margin-top: 5px; }
+
+ .grid { display: flex; gap: 12px; margin: 16px 0; }
+ .card { border: 1px solid #e3e8ef; border-radius: 10px; padding: 13px 16px; flex: 1; }
+ .card .lbl { color: #6b7684; font-size: 8pt; text-transform: uppercase; letter-spacing: .05em; }
+ .score { font-size: 32pt; font-weight: 800; line-height: 1.1; }
+ .sgood { color: #15803d; } .swarn { color: #b45309; } .sbad { color: #b91c1c; }
+
+ table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+ th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid #eef1f5; vertical-align: top; }
+ th { background: #f7f9fc; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; color: #6b7684; }
+ tbody tr { page-break-inside: avoid; }
+ tbody tr:nth-child(even) { background: #fafbfd; }
+
+ .sev { font-weight: 700; padding: 2px 8px; border-radius: 6px; font-size: 8pt; text-transform: uppercase; white-space: nowrap; }
+ .critical { background:#fde8e8; color:#b91c1c; } .high { background:#fef0e7; color:#c2410c; }
+ .medium { background:#fef9e7; color:#a16207; } .low { background:#eef6fc; color:#1d6fb8; } .info { background:#f1f3f5; color:#555; }
+
+ .proofcard { border: 1px solid #e3e8ef; border-left: 4px solid #c2410c; border-radius: 8px; padding: 11px 14px; margin: 11px 0; page-break-inside: avoid; }
+ .proof { background:#0f1626; color:#cdd6e4; border-radius:6px; padding:9px 11px; font-family:"DejaVu Sans Mono", monospace; font-size:8.5pt; white-space:pre-wrap; word-break:break-word; margin:6px 0 0; }
+ .ok { color:#15803d; font-weight:700; } .tag { font-size:8.5pt; color:#6b7684; }
+ .aibox { background:#f7f9fc; border:1px solid #e3e8ef; border-radius:10px; padding:13px 16px; }
 </style></head><body>
- <h1>Rapport d'audit de sécurité</h1>
- <div class="muted">Cible : <b>{{ target.url }}</b> ({{ target.type }}) · Scan #{{ scan.id }} ·
-   Généré le {{ generated_at }}</div>
+
+ <div class="cover">
+   <h1>Rapport d'audit de sécurité</h1>
+   <div class="target">{{ target.url }} <span style="opacity:.65">({{ target.type }})</span></div>
+   <div class="sub">Scan #{{ scan.id }} · Généré le {{ generated_at }} · plateforme SHASEC</div>
+ </div>
 
  <div class="grid">
-  <div class="card"><div class="muted">Score de sécurité</div>
-    <div class="score">{{ score }}<span style="font-size:18px;color:#9aa4b2">/100</span></div>
-    <div class="tag">{{ "plus haut = plus sûr" }}</div></div>
-  <div class="card"><div class="muted">Findings</div><div class="score">{{ findings|length }}</div>
-    <div class="tag">{% for s in sev_order %}{% if counts[s] %}{{ counts[s] }} {{ s }} · {% endif %}{% endfor %}</div></div>
-  <div class="card"><div class="muted">Preuves d'exploitation</div><div class="score">{{ exploits|length }}</div>
+  <div class="card"><div class="lbl">Score de sécurité</div>
+    <div class="score {% if score >= 80 %}sgood{% elif score >= 50 %}swarn{% else %}sbad{% endif %}">{{ score }}<span style="font-size:13pt;color:#9aa4b2;font-weight:400">/100</span></div>
+    <div class="tag">plus haut = plus sûr</div></div>
+  <div class="card"><div class="lbl">Findings</div><div class="score">{{ findings|length }}</div>
+    <div class="tag">{% for s in sev_order %}{% if counts[s] %}{{ counts[s] }} {{ s }}{% if not loop.last %} · {% endif %}{% endif %}{% endfor %}</div></div>
+  <div class="card"><div class="lbl">Preuves d'exploitation</div><div class="score">{{ exploits|length }}</div>
     <div class="tag">{{ confirmed_count }} confirmée(s)</div></div>
  </div>
 
  <h2>Résumé exécutif</h2>
  <p>{{ summary }}</p>
 
+ {% if analysis %}<h2>Analyse IA — {{ analysis.provider }}</h2>
+  <div class="aibox">
+   {% if analysis.impacts %}<h3>Impacts</h3><p>{{ analysis.impacts }}</p>{% endif %}
+   {% if analysis.recommendations %}<h3>Recommandations</h3><p style="white-space:pre-wrap">{{ analysis.recommendations }}</p>{% endif %}
+  </div>
+ {% endif %}
+
  <h2>Findings ({{ findings|length }})</h2>
- {% if findings %}<table><tr><th>Sév.</th><th>Titre</th><th>Scanner</th><th>Description</th></tr>
+ {% if findings %}<table><thead><tr><th>Sév.</th><th>Titre</th><th>Scanner</th><th>Description</th></tr></thead><tbody>
  {% for f in findings %}<tr><td><span class="sev {{ f.severity }}">{{ f.severity }}</span></td>
    <td><b>{{ f.title }}</b></td><td class="tag">{{ f.plugin }}</td>
    <td>{{ f.description or '' }}{% if f.evidence %}<div class="tag">{{ f.evidence }}</div>{% endif %}</td></tr>
- {% endfor %}</table>{% else %}<p class="ok">Aucun finding.</p>{% endif %}
+ {% endfor %}</tbody></table>{% else %}<p class="ok">Aucun finding.</p>{% endif %}
 
  <h2>Preuves d'exploitation ({{ exploits|length }})</h2>
  {% if exploits %}{% for e in exploits %}
-  <div style="margin:16px 0">
-   <span class="sev {{ e.severity }}">{{ e.severity }}</span>
+  <div class="proofcard">
+   <div><span class="sev {{ e.severity }}">{{ e.severity }}</span>
    {% if e.confirmed %}<span class="ok">✔ CONFIRMÉ</span>{% else %}<span class="tag">non confirmé</span>{% endif %}
-   <b>{{ e.title }}</b> <span class="tag">[{{ e.category }} · {{ e.module }}]</span>
-   {% if e.impact %}<div>{{ e.impact }}</div>{% endif %}
+   <b>{{ e.title }}</b> <span class="tag">[{{ e.category }} · {{ e.module }}]</span></div>
+   {% if e.impact %}<div style="margin-top:4px">{{ e.impact }}</div>{% endif %}
    {% if e.request %}<div class="proof">{{ e.request }}</div>{% endif %}
    {% if e.response %}<div class="proof">{{ e.response }}</div>{% endif %}
   </div>
  {% endfor %}{% else %}<p class="ok">Aucune preuve d'exploitation — la cible résiste aux modules exécutés.</p>{% endif %}
 
- {% if analysis %}<h2>Analyse IA ({{ analysis.provider }})</h2>
-  {% if analysis.impacts %}<h3>Impacts</h3><p>{{ analysis.impacts }}</p>{% endif %}
-  {% if analysis.recommendations %}<h3>Recommandations</h3><p>{{ analysis.recommendations }}</p>{% endif %}
- {% endif %}
-
- <footer>Généré par SHASEC · audit autorisé, borné et tracé · {{ generated_at }}.
-   Les preuves ci-dessus ont été obtenues sur une cible explicitement autorisée.</footer>
 </body></html>"""
 )
 
