@@ -78,6 +78,25 @@ RUN set -eux; \
     fi; \
     rm -rf /var/lib/apt/lists/*
 
+# httpx + katana (ProjectDiscovery, Go) — recon allies. Pinned, retried,
+# non-fatal (the plugins skip cleanly when a binary is absent). httpx is renamed
+# httpx-pd so it never clashes with the Python httpx CLI.
+ARG HTTPX_VERSION=1.6.9
+ARG KATANA_VERSION=1.1.0
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends unzip ca-certificates; \
+    arch="$(dpkg --print-architecture)"; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/httpx.zip "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_${arch}.zip"; then \
+        unzip -o /tmp/httpx.zip -d /tmp/httpx httpx && mv /tmp/httpx/httpx /usr/local/bin/httpx-pd \
+        && chmod +x /usr/local/bin/httpx-pd && rm -rf /tmp/httpx /tmp/httpx.zip; \
+    else echo "WARNING: httpx download failed — the httpx plugin will skip at runtime"; fi; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/katana.zip "https://github.com/projectdiscovery/katana/releases/download/v${KATANA_VERSION}/katana_${KATANA_VERSION}_linux_${arch}.zip"; then \
+        unzip -o /tmp/katana.zip -d /usr/local/bin katana && chmod +x /usr/local/bin/katana && rm /tmp/katana.zip; \
+    else echo "WARNING: katana download failed — the katana plugin will skip at runtime"; fi; \
+    apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # Bring in the pre-built virtualenv (lives outside /app so dev bind-mounts work)
 COPY --from=builder /opt/venv /opt/venv
 
