@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     FASTAPI_REDOCS_URL: str | None = f'{FASTAPI_API_V1_PATH}/redocs'
     FASTAPI_OPENAPI_URL: str | None = f'{FASTAPI_API_V1_PATH}/openapi'
     FASTAPI_STATIC_FILES: bool = False
+    # Interactive docs (Swagger/ReDoc/OpenAPI) are off in prod by default; set true
+    # to expose them at /api/v1/docs even in prod (e.g. during bring-up).
+    FASTAPI_EXPOSE_DOCS: bool = False
 
     # Token
     TOKEN_ALGORITHM: str = 'HS256'

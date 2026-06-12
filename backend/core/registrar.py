@@ -54,8 +54,9 @@ async def register_init(app: FastAPI):
 def register_app(router: APIRouter, name: str = "Parse name" ) -> FastAPI:
     # FastAPI
     # Interactive API docs are served in dev/preprod but disabled in prod, where
-    # the full API surface should not be publicly browsable.
-    _expose_docs = settings.ENVIRONMENT != "prod"
+    # the full API surface should not be publicly browsable. Set
+    # FASTAPI_EXPOSE_DOCS=true to opt back in (e.g. during bring-up).
+    _expose_docs = settings.ENVIRONMENT != "prod" or settings.FASTAPI_EXPOSE_DOCS
     app = FastAPI(
         title=f"[{settings.ENVIRONMENT.upper()}] {settings.FASTAPI_TITLE} {name.upper()}",
         contact={"name": "monshaapi"},

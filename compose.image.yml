@@ -16,6 +16,8 @@ services:
     environment:
       - ENVIRONMENT=prod
       - DB_AUTO_CREATE=false
+      # Set true to expose Swagger at /api/v1/docs in prod (off by default).
+      - FASTAPI_EXPOSE_DOCS=${FASTAPI_EXPOSE_DOCS:-false}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
