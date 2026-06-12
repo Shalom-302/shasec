@@ -1,0 +1,44 @@
+name: Build macOS client
+
+# Builds the Qt desktop client on a GitHub-hosted Mac and uploads a ready .dmg.
+# No Mac needed locally — download the artifact from the run's page.
+
+on:
+  push:
+    paths:
+      - 'qt-client/**'
+      - '.github/workflows/qt-mac.yml'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt (with WebSockets)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          modules: 'qtwebsockets'
+          cache: true
+
+      - name: Configure
+        working-directory: qt-client
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: qt-client
+        run: cmake --build build --parallel
+
+      - name: Bundle frameworks + make .dmg
+        working-directory: qt-client
+        run: macdeployqt build/shasec-client.app -dmg
+
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: shasec-client-macos
+          path: qt-client/build/shasec-client.dmg
+          if-no-files-found: error
