@@ -45,31 +45,37 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # nuclei (ProjectDiscovery) — security scanner binary baked into the image so
-# the shasec nuclei plugin can run. Pulls the latest release, falls back to a
-# pinned version if the GitHub API is unavailable at build time.
+# the shasec nuclei plugin can run. Version is PINNED (no api.github.com call —
+# that endpoint rate-limits shared CI runner IPs). Download is retried and
+# non-fatal: a transient GitHub hiccup must not break the CI build/deploy — the
+# nuclei plugin skips cleanly at runtime when the binary is absent.
+ARG NUCLEI_VERSION=3.3.7
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends unzip ca-certificates; \
-    ver="$(curl -fsSL https://api.github.com/repos/projectdiscovery/nuclei/releases/latest \
-        | grep -oP '\"tag_name\":\s*\"v\K[^\"]+' || echo 3.3.7)"; \
     arch="$(dpkg --print-architecture)"; \
-    curl -fsSL -o /tmp/nuclei.zip \
-        "https://github.com/projectdiscovery/nuclei/releases/download/v${ver}/nuclei_${ver}_linux_${arch}.zip"; \
-    unzip -o /tmp/nuclei.zip -d /usr/local/bin nuclei; \
-    chmod +x /usr/local/bin/nuclei; \
-    rm /tmp/nuclei.zip; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/nuclei.zip \
+        "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${arch}.zip"; then \
+        unzip -o /tmp/nuclei.zip -d /usr/local/bin nuclei && chmod +x /usr/local/bin/nuclei && rm /tmp/nuclei.zip; \
+    else \
+        echo "WARNING: nuclei download failed — image builds without it; the plugin will skip at runtime"; \
+    fi; \
     apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # nikto (web-server scanner) — not packaged on Debian trixie, so install the
-# Perl source from GitHub and expose a small wrapper on PATH.
+# Perl source from GitHub. Retried + non-fatal for the same CI-resilience reason
+# as nuclei above (the nikto plugin skips cleanly when the binary is absent).
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends perl libnet-ssleay-perl libjson-perl ca-certificates; \
-    curl -fsSL -o /tmp/nikto.tar.gz https://github.com/sullo/nikto/archive/refs/tags/2.5.0.tar.gz; \
-    mkdir -p /opt; \
-    tar -xzf /tmp/nikto.tar.gz -C /opt; \
-    printf '#!/bin/sh\nexec perl /opt/nikto-2.5.0/program/nikto.pl "$@"\n' > /usr/local/bin/nikto; \
-    chmod +x /usr/local/bin/nikto; \
-    rm /tmp/nikto.tar.gz; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/nikto.tar.gz https://github.com/sullo/nikto/archive/refs/tags/2.5.0.tar.gz; then \
+        mkdir -p /opt && tar -xzf /tmp/nikto.tar.gz -C /opt && \
+        printf '#!/bin/sh\nexec perl /opt/nikto-2.5.0/program/nikto.pl "$@"\n' > /usr/local/bin/nikto && \
+        chmod +x /usr/local/bin/nikto && rm /tmp/nikto.tar.gz; \
+    else \
+        echo "WARNING: nikto download failed — image builds without it; the plugin will skip at runtime"; \
+    fi; \
     rm -rf /var/lib/apt/lists/*
 
 # Bring in the pre-built virtualenv (lives outside /app so dev bind-mounts work)
