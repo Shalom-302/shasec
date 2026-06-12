@@ -1,19 +1,20 @@
 # SHASEC — Qt6 Desktop Console
 
-Client desktop (Qt6 / C++) pour piloter l'API SHASEC : connexion, lancement de
-scans, consultation des findings + preuves d'exploitation, génération de rapport.
-Thème « security console » dark.
+Client desktop (Qt6 / C++) pour piloter l'API SHASEC. **Console à sidebar**, thème
+sombre, accents bleu/jaune.
 
 ## Ce qu'il fait
 
-- **Connexion** : register / login (JWT stocké en mémoire).
-- **Scan** : `POST /scans/quick` (URL, type, exploitation active, token cible optionnel).
-- **Suivi** : polling auto du statut jusqu'à `completed`/`failed`.
-- **Résultats** : onglets *Findings* et *Preuves d'exploitation* (tables).
-- **Rapport** : `POST /scans/{id}/report?format=pdf|html|markdown|json&lang=fr`,
-  bouton *Ouvrir* (navigateur).
+Navigation à gauche : **Dashboard / Cibles / Scans / Rapports / Réglages**.
 
-L'URL par défaut pointe sur `https://shasec.kortexai.dev` — modifiable dans la barre du haut.
+- **Réglages** : URL de l'API (défaut `https://shasec.kortexai.dev`) + register / login.
+- **Dashboard** : cartes (nb scans, cibles, findings/preuves de la sélection) + scans récents.
+- **Cibles** : table des cibles (`GET /targets/`).
+- **Scans** : nouveau scan (`POST /scans/quick`), table des scans (`GET /scans/`),
+  polling auto, détail en onglets *Findings* / *Preuves* au clic d'un scan.
+- **Rapports** : `Générer` (stocke dans MinIO) **et** `Télécharger & ouvrir` —
+  `GET /scans/{id}/report/download` streame le fichier via l'API (auth), l'écrit en
+  local et l'ouvre. Pas besoin d'exposer MinIO.
 
 ## Prérequis
 

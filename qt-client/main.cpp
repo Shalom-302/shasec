@@ -75,6 +75,28 @@ QScrollBar:vertical { background: #15161c; width: 11px; margin: 0; }
 QScrollBar::handle:vertical { background: #3a3e4c; border-radius: 5px; min-height: 24px; }
 QScrollBar::handle:vertical:hover { background: #4aa3ff; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
+
+/* Sidebar navigation */
+QListWidget#Sidebar {
+    background: #11121a; border: none; border-right: 1px solid #2c2f3a;
+    outline: 0; padding-top: 8px; font-size: 14px;
+}
+QListWidget#Sidebar::item {
+    padding: 11px 14px; color: #9aa3b5; border-left: 3px solid transparent;
+}
+QListWidget#Sidebar::item:hover { background: #1a1c25; color: #d6dae2; }
+QListWidget#Sidebar::item:selected {
+    background: #1d2030; color: #ffffff; border-left: 3px solid #f5c542;
+}
+
+/* Dashboard stat cards */
+QFrame#Card { background: #23252e; border: 1px solid #2f323d; border-radius: 10px; }
+QLabel#CardValue { font-size: 30px; font-weight: 700; color: #4aa3ff; }
+QLabel#CardTitle { font-size: 11px; color: #8b93a6; }
+
+/* Page padding */
+QStackedWidget > QWidget { background: #15161c; }
+QStackedWidget QLabel { background: transparent; }
 )qss";
 
 int main(int argc, char* argv[])
