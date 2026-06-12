@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class Handlers:
     handlers_base_path = ('backend', 'app')
     ignored = ('__init__.py', '__pycache__','crud','schema','service')
-    paths = ('admin/api/v1', 'client/api/v1', 'mentor/api/v1', 'company/api/v1')
+    paths = ('admin/api/v1', 'client/api/v1', 'mentor/api/v1', 'company/api/v1', 'shasec/api/v1')
     # include_dirs = ["v1"]
 
     @classmethod

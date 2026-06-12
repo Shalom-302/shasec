@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from backend.core.conf import settings
 from backend.core.registrar import register_app, register_init
-from backend.app.api import admin_router
+from backend.app.api import api_router
 
 # The parent app owns the lifespan (DB tables, Redis, rate limiter) because
 # Starlette does not run the lifespan of mounted sub-applications.
@@ -40,8 +40,10 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-# Mount feature sub-applications
-app.mount("/admin", register_app(admin_router, "admin"))
+# Mount the single feature app at the root. The parent app only owns the
+# lifespan (DB/Redis/limiter) and /health; everything else lives under /api/v1
+# with one Swagger at /api/v1/docs.
+app.mount("/", register_app(api_router, "shasec"))
 
 
 if __name__ == "__main__":

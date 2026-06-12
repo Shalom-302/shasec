@@ -142,3 +142,54 @@ class Waiting_queue_filter_type(Enum):
 class Reason_type(Enum):
     COMPANY = "company"
     USER = "user"
+
+
+# ---------------------------------------------------------------------------
+# SHASEC — security-audit domain enums
+# ---------------------------------------------------------------------------
+class TargetType(StrEnum):
+    """Kind of asset being audited."""
+
+    website = "website"
+    api = "api"
+    graphql = "graphql"
+    host = "host"
+
+
+class ScanStatus(StrEnum):
+    """Lifecycle of a scan. The Scan.status column is the single source of truth."""
+
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
+class FindingSeverity(StrEnum):
+    """Normalized severity, scanner-agnostic."""
+
+    critical = "critical"
+    high = "high"
+    medium = "medium"
+    low = "low"
+    info = "info"
+
+
+class ReportFormat(StrEnum):
+    """Supported report output formats."""
+
+    pdf = "pdf"
+    html = "html"
+    markdown = "markdown"
+    json = "json"
+
+
+# Numeric weight per severity — used by the aggregator to compute the criticality
+# of a correlated finding (max wins) and by the AI scoring as a prior.
+SEVERITY_WEIGHT: dict[str, int] = {
+    FindingSeverity.critical.value: 5,
+    FindingSeverity.high.value: 4,
+    FindingSeverity.medium.value: 3,
+    FindingSeverity.low.value: 2,
+    FindingSeverity.info.value: 1,
+}

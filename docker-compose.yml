@@ -14,7 +14,17 @@ services:
       # Point the app at the compose service names (overrides .env localhost)
       - POSTGRES_HOST=monshaapi_postgres
       - REDIS_HOST=monshaapi_redis
-      - MINIO_ENDPOINT=monshaapi_minio:9000
+      # Use the compose SERVICE name (not the container_name): the MinIO/S3 client
+      # validates the host as an RFC hostname and rejects the underscore in
+      # "monshaapi_minio". "minio" resolves on the same network and is valid.
+      - MINIO_ENDPOINT=minio:9000
+      # OWASP ZAP (only reachable when started with `--profile zap`)
+      - ZAP_ENDPOINT=http://monshaapi_zap:8090
+      - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
+    # Dev: bind-mount the source so edits hot-reload (uvicorn --reload). The venv
+    # lives at /opt/venv (outside /app) so it is not shadowed by this mount.
+    volumes:
+      - ./backend:/app/backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,6 +64,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - monshaapi
+
+  # OWASP ZAP daemon — opt-in (heavy Java app). Start with:
+  #   docker compose --profile zap up -d zap
+  # The shasec `zap` plugin talks to its REST API; when this service is down the
+  # plugin skips cleanly.
+  zap:
+    image: zaproxy/zap-stable
+    container_name: monshaapi_zap
+    restart: unless-stopped
+    profiles: ["zap"]
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8090
+      -config api.key=${ZAP_API_KEY:-shasec-zap}
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
     networks:
       - monshaapi
 

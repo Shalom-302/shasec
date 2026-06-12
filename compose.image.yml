@@ -1,0 +1,93 @@
+# Production compose for Dokploy — pulls the prebuilt image from GHCR (built by
+# .github/workflows/build.yml) instead of building locally.
+#
+# Set the secrets below in the Dokploy "Environment" panel. In prod
+# (ENVIRONMENT=prod) the app REFUSES to boot with the dev default secrets, so
+# POSTGRES_PASSWORD / TOKEN_SECRET_KEY / OPERA_LOG_ENCRYPT_SECRET_KEY /
+# MINIO_SECRET_KEY / DEEPSEEK_API_KEY are mandatory. See DEPLOY.md.
+#
+# Service names (postgres/redis/minio) are kept underscore-free so the MinIO/S3
+# client accepts the host (it rejects names like "monshaapi_minio").
+
+services:
+  api:
+    image: ghcr.io/shalom-302/shasec:latest
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=prod
+      - DB_AUTO_CREATE=false
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-monshaapi}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-monshaapi}
+      - MINIO_CLOUD_URL=${MINIO_CLOUD_URL}
+      - TOKEN_SECRET_KEY=${TOKEN_SECRET_KEY}
+      - OPERA_LOG_ENCRYPT_SECRET_KEY=${OPERA_LOG_ENCRYPT_SECRET_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+    # Dokploy/Traefik routes the public domain to this container port.
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks: [shasec]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DATABASE:-monshaapi}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DATABASE:-monshaapi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [shasec]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [shasec]
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    volumes:
+      - miniodata:/data
+    networks: [shasec]
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+
+networks:
+  shasec:

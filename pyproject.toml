@@ -43,6 +43,8 @@ dependencies = [
     "minio>=7.2.9",
     "boto3>=1.35.39",
     "google-cloud-storage>=2.18.2",
+    # Reporting — PDF rendering (needs Pango/Cairo system libs, installed in the Dockerfile)
+    "weasyprint>=62.3",
     # Email
     "fastapi-mail>=1.4.1",
     # Request parsing / i18n helpers

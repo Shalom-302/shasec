@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = 'monshaapi'
     MINIO_CLOUD_URL: str = 'http://localhost:9000'
 
+    # shasec AI analysis — DeepSeek (OpenAI-compatible /chat/completions API).
+    # Set DEEPSEEK_API_KEY in .env to enable; left empty the analysis stage skips
+    # cleanly and the scan still completes. The AI never scans — it interprets the
+    # normalized findings + exploit proofs into a score, summary and remediations.
+    AI_ANALYSIS_ENABLED: bool = True
+    DEEPSEEK_API_KEY: str = ''
+    DEEPSEEK_BASE_URL: str = 'https://api.deepseek.com'
+    DEEPSEEK_MODEL: str = 'deepseek-chat'
+    DEEPSEEK_TIMEOUT: int = 120
+
     # SMTP / email (optional: leave blank to disable outgoing mail)
     SMTP_TLS: str = 'True'
     SMTP_PORT: str = '587'
@@ -101,8 +111,8 @@ class Settings(BaseSettings):
     TOKEN_REFRESH_REDIS_PREFIX: str = 'monshaapi:refresh_token'
     CAPTCHA_LOGIN_REDIS_PREFIX: str = 'monshaapi:captcha:login'
     TOKEN_REQUEST_PATH_EXCLUDE: list[str] = [  # JWT / RBAC whitelist
-        f'/admin{FASTAPI_API_V1_PATH}/auth/login',
-        f'/admin{FASTAPI_API_V1_PATH}/auth/token/new',
+        f'{FASTAPI_API_V1_PATH}/auth/login',
+        f'{FASTAPI_API_V1_PATH}/auth/token/new',
     ]
 
     # JWT
@@ -116,8 +126,8 @@ class Settings(BaseSettings):
 
     # Casbin RBAC whitelist
     RBAC_CASBIN_EXCLUDE: set[tuple[str, str]] = {
-        ('POST', f'/admin{FASTAPI_API_V1_PATH}/auth/logout'),
-        ('POST', f'/admin{FASTAPI_API_V1_PATH}/auth/token/new'),
+        ('POST', f'{FASTAPI_API_V1_PATH}/auth/logout'),
+        ('POST', f'{FASTAPI_API_V1_PATH}/auth/token/new'),
     }
 
     # Role-Menu

@@ -11,6 +11,14 @@ from backend.models.user import User
 from backend.models.opera_log import OperaLog
 from backend.models.login_log import LoginLog
 
+# SHASEC domain models
+from backend.models.target import Target
+from backend.models.scan import Scan
+from backend.models.finding import Finding
+from backend.models.ai_analysis import AIAnalysis
+from backend.models.report import Report
+from backend.models.exploit import Exploit
+
 # Auto-import every other module dropped in this package so Alembic
 # autogenerate sees its tables without editing this file: just create
 # `backend/models/<name>.py` with a `Base` subclass and run `shaapi db generate`.

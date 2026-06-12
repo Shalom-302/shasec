@@ -9,13 +9,16 @@ from backend.core.conf import settings
 
 logger = logging.getLogger(__name__)
 
-admin_router = APIRouter(prefix=f"{settings.FASTAPI_API_V1_PATH}")
+# Single unified API router: admin (auth/users/roles/RBAC/logs) and shasec
+# (targets/scans/findings) are served under one app so there is one Swagger and
+# one base path (`/api/v1`). To log in and test product routes in the same docs.
+api_router = APIRouter(prefix=f"{settings.FASTAPI_API_V1_PATH}")
 
 
 for handler in Handlers.iterator():
     if getattr(handler, 'router', None):
-        if handler.__name__.split('.')[-4] == 'admin':
-            admin_router.include_router(handler.router)
+        if handler.__name__.split('.')[-4] in ('admin', 'shasec'):
+            api_router.include_router(handler.router)
 
 
 def _load_plugins() -> None:
@@ -41,7 +44,7 @@ def _load_plugins() -> None:
             continue
         router = getattr(module, 'router', None)
         if router is not None:
-            admin_router.include_router(router)
+            api_router.include_router(router)
             logger.info("Loaded plugin '%s'", mod_info.name)
 
 

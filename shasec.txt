@@ -1,0 +1,582 @@
+# SHASEC - Architecture Technique v1
+
+## Vision
+
+Shasec est une plateforme d'audit de sécurité qui orchestre plusieurs scanners, normalise leurs résultats, les analyse avec l'IA et génère des rapports professionnels.
+
+Principe :
+
+Scanner → Corrélation → IA → Rapport
+
+---
+
+# Architecture Générale
+
+Qt Desktop
+│
+REST / WebSocket
+│
+Shasec Backend (ShaAPI)
+│
+Shasec Core
+│
+Plugin Manager
+│
+Plugins
+│
+Nmap / Nuclei / ZAP / Discovery / Custom
+
+---
+
+# Frontend
+
+Module :
+shasec-desktop
+
+Technologie :
+Qt 6 (C++)
+
+Responsabilités :
+
+* Tableau de bord
+* Création de scans
+* Suivi des scans
+* Consultation des findings
+* Consultation des rapports
+* Export PDF
+* Paramètres
+
+Communication :
+
+REST API
+WebSocket
+
+Le frontend ne contient aucune logique métier.
+
+---
+
+# Backend
+
+Module :
+shasec-backend
+
+Technologie :
+ShaAPI (Python)
+
+Responsabilités :
+
+* API REST
+* Authentification
+* Gestion utilisateurs
+* Gestion projets
+* Gestion scans
+* Gestion rapports
+* Communication WebSocket
+
+Le backend agit comme une couche d'exposition.
+
+Il ne réalise aucun scan directement.
+
+---
+
+# Core
+
+Module :
+shasec-core
+
+Responsabilités :
+
+* Orchestration
+* Pipeline de scan
+* Corrélation
+* Planification
+* Gestion cycle de vie
+
+Fonctions :
+
+create_scan()
+
+start_scan()
+
+execute_plugins()
+
+aggregate_findings()
+
+launch_ai_analysis()
+
+generate_report()
+
+close_scan()
+
+---
+
+# Modèles
+
+## Target
+
+Représente une cible.
+
+Attributs :
+
+* id
+* name
+* url
+* type
+
+Types :
+
+* website
+* api
+* graphql
+* host
+
+---
+
+## Scan
+
+Représente un audit.
+
+Attributs :
+
+* id
+* target_id
+* status
+* started_at
+* completed_at
+
+Status :
+
+* pending
+* running
+* completed
+* failed
+
+---
+
+## Finding
+
+Représente une vulnérabilité normalisée.
+
+Attributs :
+
+* id
+* scan_id
+* plugin
+* severity
+* title
+* description
+* evidence
+* recommendation
+
+Severities :
+
+* critical
+* high
+* medium
+* low
+* info
+
+---
+
+## AIAnalysis
+
+Attributs :
+
+* id
+* scan_id
+* score
+* summary
+* recommendations
+
+---
+
+## Report
+
+Attributs :
+
+* id
+* scan_id
+* format
+* location
+
+Formats :
+
+* pdf
+* html
+* markdown
+* json
+
+---
+
+# Services
+
+## ScanService
+
+Responsabilités :
+
+* créer scan
+* démarrer scan
+* arrêter scan
+* consulter scan
+
+---
+
+## PluginService
+
+Responsabilités :
+
+* charger plugins
+* exécuter plugins
+* surveiller plugins
+
+---
+
+## DiscoveryService
+
+Responsabilités :
+
+* OpenAPI
+* Swagger
+* GraphQL
+* Routes
+
+---
+
+## AIService
+
+Responsabilités :
+
+* analyse DeepSeek
+* scoring
+* recommandations
+
+---
+
+## ReportService
+
+Responsabilités :
+
+* génération PDF
+* génération HTML
+* génération Markdown
+
+---
+
+# Plugin Manager
+
+Répertoire :
+
+plugins/
+
+Chaque plugin possède :
+
+plugin.json
+
+executable
+
+schema.json
+
+Structure :
+
+plugins/
+├── nmap/
+├── nuclei/
+├── zap/
+├── discovery/
+├── jwt/
+└── graphql/
+
+---
+
+# Contrat Plugin
+
+Entrée :
+
+{
+"scan_id": "...",
+"target": "https://example.com"
+}
+
+Sortie :
+
+{
+"plugin": "nuclei",
+"findings": []
+}
+
+Tous les plugins doivent respecter ce contrat.
+
+---
+
+# Plugins Externes
+
+## Nmap Plugin
+
+Utilise :
+
+nmap
+
+Responsabilités :
+
+* ports
+* services
+* versions
+
+---
+
+## Nuclei Plugin
+
+Utilise :
+
+nuclei
+
+Responsabilités :
+
+* CVE
+* templates
+* vulnérabilités connues
+
+---
+
+## ZAP Plugin
+
+Utilise :
+
+OWASP ZAP API
+
+Responsabilités :
+
+* scan web
+* scan API
+* spider
+
+---
+
+## Nikto Plugin
+
+Utilise :
+
+nikto
+
+Responsabilités :
+
+* configuration serveur
+* vulnérabilités web
+
+---
+
+# Plugins Internes
+
+## Discovery Plugin
+
+Responsabilités :
+
+* découverte routes
+* découverte schémas
+* découverte authentification
+
+Langage recommandé :
+
+Go
+
+---
+
+## JWT Plugin
+
+Responsabilités :
+
+* validation JWT
+* expiration
+* algorithmes faibles
+
+---
+
+## RBAC Plugin
+
+Responsabilités :
+
+* contrôle accès
+* permissions
+
+---
+
+## GraphQL Plugin
+
+Responsabilités :
+
+* introspection
+* schémas
+* permissions
+
+---
+
+# Agrégateur
+
+Module :
+aggregator
+
+Responsabilités :
+
+* fusionner findings
+* supprimer doublons
+* calcul criticité
+
+Sortie :
+
+Liste unique de findings.
+
+---
+
+# IA
+
+Module :
+shasec-ai
+
+Fournisseur :
+
+DeepSeek API
+
+Entrée :
+
+* findings
+* cible
+* métadonnées scan
+
+Sortie :
+
+* score
+* résumé
+* impacts
+* recommandations
+* correctifs
+
+L'IA ne réalise jamais de scan.
+
+---
+
+# Reporting
+
+Pipeline :
+
+Findings
++
+Analyse IA
+
+↓
+
+Report Engine
+
+↓
+
+PDF
+
+Contenu :
+
+* résumé exécutif
+* score sécurité
+* vulnérabilités
+* impacts
+* recommandations
+* correctifs
+
+---
+
+# API REST
+
+POST /scans
+
+GET /scans
+
+GET /scans/{id}
+
+POST /scans/{id}/start
+
+POST /scans/{id}/cancel
+
+GET /scans/{id}/findings
+
+GET /scans/{id}/analysis
+
+POST /reports
+
+GET /reports/{id}
+
+POST /discover
+
+---
+
+# Workflow
+
+Utilisateur
+
+↓
+
+Desktop Qt
+
+↓
+
+POST /scans
+
+↓
+
+Core
+
+↓
+
+Discovery Plugin
+
+↓
+
+Nmap Plugin
+
+↓
+
+Nuclei Plugin
+
+↓
+
+ZAP Plugin
+
+↓
+
+Agrégateur
+
+↓
+
+DeepSeek
+
+↓
+
+Report Engine
+
+↓
+
+PDF
+
+↓
+
+Desktop Qt
+
+---
+
+# Règle d'Architecture
+
+Frontend :
+Interface uniquement
+
+Backend :
+Transport uniquement
+
+Core :
+Orchestration uniquement
+
+Plugins :
+Collecte uniquement
+
+IA :
+Analyse uniquement
+
+Report :
+Documentation uniquement
+
+NB: pour l'IA on pourra utiliser https://ollama.traaf.app/ ce endpoint pour lanalyse 
