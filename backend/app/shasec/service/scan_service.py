@@ -124,7 +124,7 @@ class ScanService:
             await db.flush()  # populate scan.id before the transaction commits
             scan_id = scan.id
 
-        _fire(scan_id, auth_token=auth_token)
+        await _dispatch(scan_id, auth_token=auth_token)
 
         async with async_db_session() as db:
             return await scan_dao.get(db, scan_id)

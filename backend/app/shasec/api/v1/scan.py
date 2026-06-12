@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request
+from fastapi import APIRouter, Path, Query, Request, Response
 
 from backend.app.shasec.schema.ai_analysis import GetAIAnalysisDetails
 from backend.app.shasec.schema.finding import GetFindingDetails
@@ -101,6 +101,22 @@ async def generate_scan_report(
     report = await report_service.generate(scan_id=pk, format=format, lang=lang)
     data = GetReportDetails(**select_as_dict(report))
     return response_base.success(request=request, data=data)
+
+
+@router.get('/{pk}/report/download', summary='Render & stream a report through the API', dependencies=[DependsJwtAuth])
+async def download_scan_report(
+    pk: Annotated[int, Path(...)],
+    format: Annotated[str, Query()] = 'pdf',
+    lang: Annotated[str, Query()] = 'fr',
+) -> Response:
+    # Streams the report bytes directly (no public MinIO needed). The client saves
+    # and opens it locally; auth via the Bearer token like every other route.
+    content, mime, filename = await report_service.render(scan_id=pk, format=format, lang=lang)
+    return Response(
+        content=content,
+        media_type=mime,
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get('/{pk}/exploits', summary='Get scan exploit proofs', dependencies=[DependsJwtAuth])

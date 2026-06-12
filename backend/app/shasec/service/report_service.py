@@ -174,7 +174,9 @@ async def _localize_fr(findings: list, exploits: list) -> None:
 
 class ReportService:
     @staticmethod
-    async def generate(*, scan_id: int, format: str = ReportFormat.html.value, lang: str = 'fr'):
+    async def render(*, scan_id: int, format: str = ReportFormat.html.value,
+                     lang: str = 'fr') -> tuple[bytes, str, str]:
+        """Render a report to bytes (no storage). Returns (content, mime, filename)."""
         fmt = format.lower()
         if fmt not in {f.value for f in ReportFormat}:
             raise errors.RequestError(msg=f'Unsupported report format: {format}')
@@ -212,6 +214,12 @@ class ReportService:
 
         content, ext, mime = _serialize(fmt, ctx)
         filename = f'shasec_report_scan{scan_id}_{ext}.{ext}'
+        return content, mime, filename
+
+    @staticmethod
+    async def generate(*, scan_id: int, format: str = ReportFormat.html.value, lang: str = 'fr'):
+        """Render + store the report in MinIO and persist a Report row."""
+        content, _mime, filename = await ReportService.render(scan_id=scan_id, format=format, lang=lang)
 
         # MinIO client init + upload are blocking — keep them off the event loop.
         def _upload() -> str:
@@ -224,11 +232,11 @@ class ReportService:
         location = await asyncio.to_thread(_upload)
 
         async with async_db_session.begin() as db:
-            report = await report_dao.create(db, CreateReportParam(scan_id=scan_id, format=fmt))
+            report = await report_dao.create(db, CreateReportParam(scan_id=scan_id, format=format.lower()))
             report.location = location
             await db.flush()
             await db.refresh(report)
-        log.info(f'shasec report for scan {scan_id} ({fmt}) -> {location}')
+        log.info(f'shasec report for scan {scan_id} ({format.lower()}) -> {location}')
         return report
 
 
