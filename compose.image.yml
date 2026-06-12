@@ -14,9 +14,13 @@ services:
     image: ghcr.io/shalom-302/shasec:latest
     restart: unless-stopped
     environment:
-      - ENVIRONMENT=prod
+      # 'prod' by default (docs off, secret guard on). Set ENVIRONMENT=preprod in
+      # Dokploy to expose Swagger at /api/v1/docs while keeping the secret guard —
+      # works with the currently-deployed image (no rebuild needed).
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
       - DB_AUTO_CREATE=false
-      # Set true to expose Swagger at /api/v1/docs in prod (off by default).
+      # Alternative: keep ENVIRONMENT=prod and set this true (needs the image that
+      # carries the FASTAPI_EXPOSE_DOCS flag).
       - FASTAPI_EXPOSE_DOCS=${FASTAPI_EXPOSE_DOCS:-false}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
