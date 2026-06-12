@@ -81,8 +81,8 @@ RUN set -eux; \
 # httpx + katana (ProjectDiscovery, Go) — recon allies. Pinned, retried,
 # non-fatal (the plugins skip cleanly when a binary is absent). httpx is renamed
 # httpx-pd so it never clashes with the Python httpx CLI.
-ARG HTTPX_VERSION=1.6.9
-ARG KATANA_VERSION=1.1.0
+ARG HTTPX_VERSION=1.9.0
+ARG KATANA_VERSION=1.6.1
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends unzip ca-certificates; \
     arch="$(dpkg --print-architecture)"; \
