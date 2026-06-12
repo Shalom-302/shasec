@@ -141,5 +141,10 @@ class ScanService:
                 db, pk, {'status': ScanStatus.failed.value, 'error': 'Cancelled by user'}
             )
 
+    @staticmethod
+    async def delete(*, pk: list[int]) -> int:
+        async with async_db_session.begin() as db:
+            return await scan_dao.delete(db, pk)
+
 
 scan_service: ScanService = ScanService()

@@ -97,6 +97,12 @@ QLabel#CardTitle { font-size: 11px; color: #8b93a6; }
 /* Page padding */
 QStackedWidget > QWidget { background: #15161c; }
 QStackedWidget QLabel { background: transparent; }
+
+/* "How it works" guide banner */
+QLabel#Guide {
+    background: #1d2433; border: 1px solid #2f3a52; border-left: 3px solid #f5c542;
+    border-radius: 8px; padding: 10px 14px; color: #c7d0e0; font-size: 12px;
+}
 )qss";
 
 int main(int argc, char* argv[])

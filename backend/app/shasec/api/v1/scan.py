@@ -70,6 +70,14 @@ async def cancel_scan(request: Request, pk: Annotated[int, Path(...)]) -> Respon
     return response_base.fail(request=request)
 
 
+@router.delete('/', summary='Delete scans', dependencies=[DependsJwtAuth])
+async def delete_scans(request: Request, pk: Annotated[list[int], Query(...)]) -> ResponseModel:
+    count = await scan_service.delete(pk=pk)
+    if count > 0:
+        return response_base.success(request=request)
+    return response_base.fail(request=request)
+
+
 @router.get('/{pk}/findings', summary='Get scan findings', dependencies=[DependsJwtAuth])
 async def get_scan_findings(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
     findings = await finding_service.get_by_scan(scan_id=pk)

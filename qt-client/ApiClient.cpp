@@ -164,6 +164,22 @@ void ApiClient::cancelScan(int id)
     });
 }
 
+void ApiClient::deleteScan(int id)
+{
+    QNetworkReply* reply = m_nam.deleteResource(jsonRequest(QStringLiteral("/scans/?pk=%1").arg(id)));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handle(reply, [this](const QJsonValue&) { emit scanDeleted(); });
+    });
+}
+
+void ApiClient::deleteTarget(int id)
+{
+    QNetworkReply* reply = m_nam.deleteResource(jsonRequest(QStringLiteral("/targets/?pk=%1").arg(id)));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        handle(reply, [this](const QJsonValue&) { emit targetDeleted(); });
+    });
+}
+
 void ApiClient::authorizeTarget(int id, bool authorized)
 {
     QJsonObject payload{{"is_authorized", authorized}};

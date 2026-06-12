@@ -35,7 +35,9 @@ public:
     void getExploits(int id);
     void getAnalysis(int id);
     void cancelScan(int id);
+    void deleteScan(int id);
     void authorizeTarget(int id, bool authorized);
+    void deleteTarget(int id);
 
     void generateReport(int id, const QString& format);
     void downloadReport(int id, const QString& format);
@@ -51,7 +53,9 @@ signals:
     void exploitsReady(const QJsonArray& exploits);
     void analysisReady(const QJsonObject& analysis);
     void scanCancelled();
+    void scanDeleted();
     void targetAuthorized();
+    void targetDeleted();
     void reportReady(const QString& location);
     void reportDownloaded(const QByteArray& data, const QString& filename);
     void error(const QString& message);

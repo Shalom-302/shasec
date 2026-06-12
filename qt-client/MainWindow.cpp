@@ -155,6 +155,16 @@ MainWindow::MainWindow(QWidget* parent)
         statusBar()->showMessage(QStringLiteral("Scan annulé"));
         refreshData();
     });
+    connect(m_api, &ApiClient::scanDeleted, this, [this]() {
+        statusBar()->showMessage(QStringLiteral("Scan supprimé"));
+        m_findings->setRowCount(0);
+        m_exploits->setRowCount(0);
+        refreshData();
+    });
+    connect(m_api, &ApiClient::targetDeleted, this, [this]() {
+        statusBar()->showMessage(QStringLiteral("Cible supprimée"));
+        refreshData();
+    });
     connect(m_api, &ApiClient::reportReady, this, [this](const QString& loc) {
         m_reportInfo->setText(QStringLiteral("Stocké : %1").arg(loc));
     });
@@ -202,6 +212,16 @@ QWidget* MainWindow::buildDashboard()
     auto* v = new QVBoxLayout(page);
     v->addWidget(new QLabel(QStringLiteral("<h2 style='color:#f2f4f8'>Dashboard</h2>")));
 
+    auto* guide = new QLabel(QStringLiteral(
+        "<b>Comment ça marche :</b>&nbsp; ①&nbsp;Onglet <b>Scans</b> → URL + type, coche "
+        "<i>Exploitation active</i> pour les preuves, clique <b>Lancer</b>.&nbsp;&nbsp; "
+        "②&nbsp;Clique un scan → <b>Findings</b> &amp; <b>Preuves</b> (clic-droit = rapport, "
+        "analyse IA, relancer, supprimer).&nbsp;&nbsp; ③&nbsp;Onglet <b>Rapports</b> → "
+        "<b>Télécharger &amp; ouvrir</b> le PDF."));
+    guide->setObjectName(QStringLiteral("Guide"));
+    guide->setWordWrap(true);
+    v->addWidget(guide);
+
     auto* cards = new QHBoxLayout();
     cards->addWidget(statCard(QStringLiteral("Scans"), m_cardScans));
     cards->addWidget(statCard(QStringLiteral("Cibles"), m_cardTargets));
@@ -220,12 +240,50 @@ QWidget* MainWindow::buildTargets()
     auto* page = new QWidget(this);
     auto* v = new QVBoxLayout(page);
     v->addWidget(new QLabel(QStringLiteral("<h2 style='color:#f2f4f8'>Cibles</h2>")));
+    auto* hint = new QLabel(QStringLiteral(
+        "Les API / sites que tu audites. <b>Clic-droit</b> sur une ligne : nouveau scan, "
+        "autoriser/révoquer, supprimer."));
+    hint->setStyleSheet(QStringLiteral("color:#8b93a6"));
+    hint->setWordWrap(true);
+    v->addWidget(hint);
     m_targetsTable = makeTable({"#", "Nom", "URL", "Type", "Autorisée"});
     v->addWidget(m_targetsTable, 1);
-    auto* hint = new QLabel(QStringLiteral(
-        "Lance un scan depuis l'onglet Scans — la cible est créée/réutilisée automatiquement."));
-    hint->setStyleSheet(QStringLiteral("color:#8b93a6"));
-    v->addWidget(hint);
+
+    m_targetsTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_targetsTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QTableWidgetItem* it = m_targetsTable->itemAt(pos);
+        if (!it)
+            return;
+        const int row = it->row();
+        const int id = m_targetsTable->item(row, 0)->data(Qt::UserRole).toInt();
+        if (id <= 0)
+            return;
+        const QString url = m_targetsTable->item(row, 2)->text();
+        const QString type = m_targetsTable->item(row, 3)->text();
+        const bool authorized = m_targetsTable->item(row, 4)->text() == QStringLiteral("✔");
+
+        QMenu menu(this);
+        QAction* aScan = menu.addAction(QStringLiteral("🛰  Nouveau scan sur cette cible"));
+        QAction* aAuth = menu.addAction(authorized ? QStringLiteral("🔒  Révoquer l'autorisation")
+                                                    : QStringLiteral("✅  Autoriser"));
+        menu.addSeparator();
+        QAction* aDel = menu.addAction(QStringLiteral("🗑  Supprimer la cible"));
+
+        QAction* chosen = menu.exec(m_targetsTable->viewport()->mapToGlobal(pos));
+        if (chosen == aScan) {
+            m_scanUrl->setText(url);
+            const int idx = m_type->findText(type);
+            if (idx >= 0)
+                m_type->setCurrentIndex(idx);
+            m_sidebar->setCurrentRow(2);  // Scans
+        } else if (chosen == aAuth) {
+            m_api->authorizeTarget(id, !authorized);
+        } else if (chosen == aDel) {
+            if (QMessageBox::question(this, QStringLiteral("Supprimer"),
+                    QStringLiteral("Supprimer la cible « %1 » ?").arg(url)) == QMessageBox::Yes)
+                m_api->deleteTarget(id);
+        }
+    });
     return page;
 }
 
@@ -234,6 +292,12 @@ QWidget* MainWindow::buildScans()
     auto* page = new QWidget(this);
     auto* v = new QVBoxLayout(page);
     v->addWidget(new QLabel(QStringLiteral("<h2 style='color:#f2f4f8'>Scans</h2>")));
+    auto* shint = new QLabel(QStringLiteral(
+        "URL d'une cible <b>autorisée</b> + type ; coche <i>Exploitation active</i> pour les preuves. "
+        "<b>Clique</b> un scan = détails ; <b>clic-droit</b> = rapport / IA / relancer / supprimer."));
+    shint->setStyleSheet(QStringLiteral("color:#8b93a6"));
+    shint->setWordWrap(true);
+    v->addWidget(shint);
 
     auto* box = new QGroupBox(QStringLiteral("Nouveau scan"), page);
     auto* hb = new QHBoxLayout(box);
@@ -309,6 +373,7 @@ QWidget* MainWindow::buildScans()
         menu.addSeparator();
         QAction* aCancel = menu.addAction(QStringLiteral("✖  Annuler le scan"));
         aCancel->setEnabled(status == QStringLiteral("running") || status == QStringLiteral("pending"));
+        QAction* aDelete = menu.addAction(QStringLiteral("🗑  Supprimer le scan"));
 
         QAction* chosen = menu.exec(m_scansTable->viewport()->mapToGlobal(pos));
         if (chosen == aDetails) {
@@ -324,6 +389,10 @@ QWidget* MainWindow::buildScans()
             m_api->quickScan(url, type, true);
         } else if (chosen == aCancel) {
             m_api->cancelScan(id);
+        } else if (chosen == aDelete) {
+            if (QMessageBox::question(this, QStringLiteral("Supprimer"),
+                    QStringLiteral("Supprimer le scan #%1 et ses résultats ?").arg(id)) == QMessageBox::Yes)
+                m_api->deleteScan(id);
         }
     });
     return page;
@@ -334,6 +403,12 @@ QWidget* MainWindow::buildReports()
     auto* page = new QWidget(this);
     auto* v = new QVBoxLayout(page);
     v->addWidget(new QLabel(QStringLiteral("<h2 style='color:#f2f4f8'>Rapports</h2>")));
+    auto* rhint = new QLabel(QStringLiteral(
+        "Sélectionne d'abord un scan (onglet Scans), puis <b>Télécharger &amp; ouvrir</b> "
+        "(PDF recommandé)."));
+    rhint->setStyleSheet(QStringLiteral("color:#8b93a6"));
+    rhint->setWordWrap(true);
+    v->addWidget(rhint);
 
     auto* box = new QGroupBox(QStringLiteral("Générer / télécharger"), page);
     auto* hb = new QHBoxLayout(box);
@@ -450,7 +525,9 @@ void MainWindow::fillTargets(const QJsonArray& targets)
         m_targetType[id] = t.value(QStringLiteral("type")).toString();
         const int r = m_targetsTable->rowCount();
         m_targetsTable->insertRow(r);
-        m_targetsTable->setItem(r, 0, new QTableWidgetItem(QString::number(id)));
+        auto* idItem = new QTableWidgetItem(QString::number(id));
+        idItem->setData(Qt::UserRole, id);
+        m_targetsTable->setItem(r, 0, idItem);
         m_targetsTable->setItem(r, 1, new QTableWidgetItem(t.value(QStringLiteral("name")).toString()));
         m_targetsTable->setItem(r, 2, new QTableWidgetItem(t.value(QStringLiteral("url")).toString()));
         m_targetsTable->setItem(r, 3, new QTableWidgetItem(t.value(QStringLiteral("type")).toString()));
