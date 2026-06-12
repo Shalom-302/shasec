@@ -154,8 +154,8 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     setConnected(false);
-    m_sidebar->setCurrentRow(4);  // start on Réglages — connect first
-    statusBar()->showMessage(QStringLiteral("Va dans Réglages pour te connecter."));
+    m_sidebar->setCurrentRow(4);  // start on Compte — connect first
+    statusBar()->showMessage(QStringLiteral("Connecte-toi pour démarrer."));
 }
 
 QWidget* MainWindow::buildSidebar()
@@ -167,7 +167,7 @@ QWidget* MainWindow::buildSidebar()
     m_sidebar->addItem(QStringLiteral("  🎯   Cibles"));
     m_sidebar->addItem(QStringLiteral("  🛰   Scans"));
     m_sidebar->addItem(QStringLiteral("  📄   Rapports"));
-    m_sidebar->addItem(QStringLiteral("  ⚙   Réglages"));
+    m_sidebar->addItem(QStringLiteral("  👤   Compte"));
     return m_sidebar;
 }
 
@@ -308,23 +308,16 @@ QWidget* MainWindow::buildSettings()
 {
     auto* page = new QWidget(this);
     auto* v = new QVBoxLayout(page);
-    v->addWidget(new QLabel(QStringLiteral("<h2 style='color:#f2f4f8'>Réglages</h2>")));
+    v->addWidget(new QLabel(QStringLiteral("<h2 style='color:#f2f4f8'>Compte</h2>")));
 
-    auto* box = new QGroupBox(QStringLiteral("Connexion à l'API SHASEC"), page);
+    auto* box = new QGroupBox(QStringLiteral("Connexion"), page);
     auto* form = new QVBoxLayout(box);
-    m_baseUrl = new QLineEdit(QStringLiteral("https://shasec.kortexai.dev"), box);
     m_email = new QLineEdit(box);
     m_email->setPlaceholderText(QStringLiteral("email"));
     m_password = new QLineEdit(box);
     m_password->setPlaceholderText(QStringLiteral("mot de passe"));
     m_password->setEchoMode(QLineEdit::Password);
 
-    auto* row1 = new QHBoxLayout();
-    row1->addWidget(new QLabel(QStringLiteral("API :")));
-    row1->addWidget(m_baseUrl, 1);
-    auto* row2 = new QHBoxLayout();
-    row2->addWidget(m_email, 1);
-    row2->addWidget(m_password, 1);
     auto* regBtn = new QPushButton(QStringLiteral("Créer un compte"), box);
     auto* connBtn = new QPushButton(QStringLiteral("Se connecter"), box);
     connBtn->setObjectName(QStringLiteral("Primary"));
@@ -334,20 +327,21 @@ QWidget* MainWindow::buildSettings()
     row3->addStretch();
     m_connStatus = new QLabel(QStringLiteral("Non connecté"), box);
 
-    form->addLayout(row1);
-    form->addLayout(row2);
+    form->addWidget(m_email);
+    form->addWidget(m_password);
     form->addLayout(row3);
     form->addWidget(m_connStatus);
     v->addWidget(box);
     v->addStretch();
 
+    // Pressing Enter in either field logs in.
+    connect(m_password, &QLineEdit::returnPressed, connBtn, &QPushButton::click);
+
     connect(connBtn, &QPushButton::clicked, this, [this]() {
-        m_api->setBaseUrl(m_baseUrl->text());
         m_connStatus->setText(QStringLiteral("Connexion…"));
         m_api->login(m_email->text(), m_password->text());
     });
     connect(regBtn, &QPushButton::clicked, this, [this]() {
-        m_api->setBaseUrl(m_baseUrl->text());
         m_connStatus->setText(QStringLiteral("Création du compte…"));
         m_api->registerUser(m_email->text(), m_password->text());
     });

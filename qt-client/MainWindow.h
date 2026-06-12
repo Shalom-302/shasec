@@ -44,8 +44,7 @@ private:
     QListWidget* m_sidebar;
     QStackedWidget* m_stack;
 
-    // Réglages / connexion
-    QLineEdit* m_baseUrl;
+    // Compte / connexion
     QLineEdit* m_email;
     QLineEdit* m_password;
     QLabel*    m_connStatus;
