@@ -21,6 +21,8 @@ services:
       # OWASP ZAP (only reachable when started with `--profile zap`)
       - ZAP_ENDPOINT=http://monshaapi_zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
+      # Durable scans: enqueue to the arq worker (below) instead of in-process.
+      - SHASEC_USE_ARQ=true
     # Dev: bind-mount the source so edits hot-reload (uvicorn --reload). The venv
     # lives at /opt/venv (outside /app) so it is not shadowed by this mount.
     volumes:
@@ -32,6 +34,35 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+    networks:
+      - monshaapi
+
+  # arq worker — runs the scan pipeline jobs enqueued by the API (durability).
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: monshaapi:latest
+    container_name: monshaapi_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST=monshaapi_postgres
+      - REDIS_HOST=monshaapi_redis
+      - MINIO_ENDPOINT=minio:9000
+      - ZAP_ENDPOINT=http://monshaapi_zap:8090
+      - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
+      - SHASEC_USE_ARQ=true
+    volumes:
+      - ./backend:/app/backend
+    # Override the API entrypoint: run the arq worker, not uvicorn/migrations.
+    entrypoint: ["arq", "backend.app.shasec.worker.WorkerSettings"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - monshaapi
 

@@ -42,6 +42,8 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      # Durable scans: enqueue to the arq worker below. Set false to run in-process.
+      - SHASEC_USE_ARQ=${SHASEC_USE_ARQ:-true}
     # Dokploy/Traefik routes the public domain to this container port.
     expose:
       - "8000"
@@ -52,6 +54,39 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+    networks: [shasec]
+
+  # arq worker — runs the scan pipeline jobs enqueued by the API (durability:
+  # a scan survives an API restart). Same image, different entrypoint.
+  worker:
+    image: ghcr.io/shalom-302/shasec:latest
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-shasec_pg_changeme}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-monshaapi}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-shasecadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-shasec_minio_changeme}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-monshaapi}
+      - MINIO_CLOUD_URL=${MINIO_CLOUD_URL:-http://localhost:9000}
+      - TOKEN_SECRET_KEY=${TOKEN_SECRET_KEY}
+      - OPERA_LOG_ENCRYPT_SECRET_KEY=${OPERA_LOG_ENCRYPT_SECRET_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - SHASEC_USE_ARQ=true
+    entrypoint: ["arq", "backend.app.shasec.worker.WorkerSettings"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks: [shasec]
 
   postgres:
