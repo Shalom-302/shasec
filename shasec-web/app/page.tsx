@@ -23,6 +23,90 @@ async function api(path: string, opts: { method?: string; body?: any; token?: st
 
 const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 
+// ---- Subdomain map: parse the subfinder triage finding into rows -------------
+type SubRow = { kind: string; host: string; doc: string; title: string };
+
+function parseSubdomainMap(findings: any[]): SubRow[] | null {
+  const triage = findings.find(
+    f => f.plugin === 'subfinder' && (f.title || '').startsWith('Cartographie des sous-domaines')
+  );
+  if (!triage?.evidence) return null;
+  const rows: SubRow[] = triage.evidence
+    .split('\n')
+    .map((line: string) => {
+      const [kind, host, doc, title] = line.split('|').map((s: string) => (s || '').trim());
+      return { kind: kind || 'inconnu', host: host || '', doc: doc || '', title: title || '' };
+    })
+    .filter((r: SubRow) => r.host);
+  // Enrich with the dedicated "Documentation d'API exposée" findings (host · kind · doc).
+  findings
+    .filter(f => f.plugin === 'subfinder' && (f.title || '').startsWith("Documentation d'API"))
+    .forEach(f => {
+      const parts = (f.evidence || '').split('·').map((s: string) => s.trim());
+      const row = rows.find(r => r.host === parts[0]);
+      if (row && !row.doc && parts[2]) row.doc = parts[2];
+    });
+  const rank = (k: string) => (k === 'api' ? 0 : k === 'frontend' ? 1 : 2);
+  return rows.sort((a, b) => rank(a.kind) - rank(b.kind) || a.host.localeCompare(b.host));
+}
+
+function KindBadge({ kind }: { kind: string }) {
+  const map: Record<string, [string, string]> = {
+    api: ['API · Backend', 'var(--accent)'],
+    frontend: ['Frontend', 'var(--accent2)'],
+    inconnu: ['Inconnu', 'var(--info)'],
+  };
+  const [label, color] = map[kind] || map.inconnu;
+  return (
+    <span style={{ background: color, color: '#fff', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 5, whiteSpace: 'nowrap' }}>
+      {label}
+    </span>
+  );
+}
+
+function SubdomainMap({ rows }: { rows: SubRow[] }) {
+  const apis = rows.filter(r => r.kind === 'api').length;
+  const fronts = rows.filter(r => r.kind === 'frontend').length;
+  const docs = rows.filter(r => r.doc).length;
+  return (
+    <div className="panel">
+      <h2>Cartographie des sous-domaines · {rows.length} sondés</h2>
+      <p className="sub" style={{ margin: '0 0 12px', fontSize: 12.5 }}>
+        {apis} API/backend · {fronts} frontend · {docs} doc(s) d'API trouvée(s). Type déduit du contenu servi ;
+        à confirmer manuellement, uniquement dans le scope.
+      </p>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase' }}>
+              <th style={{ padding: '6px 8px' }}>Type</th>
+              <th style={{ padding: '6px 8px' }}>Sous-domaine</th>
+              <th style={{ padding: '6px 8px' }}>Doc API</th>
+              <th style={{ padding: '6px 8px' }}>Titre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                <td style={{ padding: '7px 8px' }}><KindBadge kind={r.kind} /></td>
+                <td style={{ padding: '7px 8px' }}>
+                  <a href={`https://${r.host}`} target="_blank" rel="noreferrer" className="mono">{r.host}</a>
+                </td>
+                <td style={{ padding: '7px 8px' }}>
+                  {r.doc
+                    ? <a href={r.doc} target="_blank" rel="noreferrer" className="mono" style={{ color: 'var(--accent2)' }}>{r.doc}</a>
+                    : <span className="muted">—</span>}
+                </td>
+                <td style={{ padding: '7px 8px' }} className="muted">{r.title || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Page() {
   const [token, setToken] = useState<string | null>(null);
   const [email, setEmail] = useState('pentest-lab@kaanari.com');
@@ -116,9 +200,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     return () => { stop = true; clearInterval(poll.current); };
   }, [scanId, token]);
 
+  const subMap = findings ? parseSubdomainMap(findings) : null;
+  const isMapFinding = (f: any) =>
+    f.plugin === 'subfinder' &&
+    ((f.title || '').startsWith('Cartographie des sous-domaines') || (f.title || '').startsWith("Documentation d'API"));
+  const listFindings = (findings || []).filter(f => !(subMap && subMap.length && isMapFinding(f)));
   const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
-  (findings || []).forEach(f => { counts[f.severity] = (counts[f.severity] || 0) + 1; });
-  const sorted = (findings || []).slice().sort(
+  listFindings.forEach(f => { counts[f.severity] = (counts[f.severity] || 0) + 1; });
+  const sorted = listFindings.slice().sort(
     (a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity)
   );
 
@@ -194,11 +283,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         </div>
       )}
 
+      {/* Subdomain map (frontend / API-backend / doc) */}
+      {subMap && subMap.length > 0 && <SubdomainMap rows={subMap} />}
+
       {/* Findings */}
       {findings && (
         <div className="panel">
           <div className="toolbar" style={{ marginBottom: 12 }}>
-            <h2 style={{ margin: 0 }}>Findings · {findings.length}</h2>
+            <h2 style={{ margin: 0 }}>Findings · {listFindings.length}</h2>
             <button className="ghost" onClick={() => setRaw(r => !r)}>{raw ? 'Vue lisible' : 'JSON brut'}</button>
           </div>
 

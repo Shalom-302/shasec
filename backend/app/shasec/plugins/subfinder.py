@@ -95,16 +95,18 @@ class SubfinderPlugin(ScannerPlugin):
         # --- Pass 2: classify frontend vs API + find docs -----------------------
         probed = await self._triage(subs[:_MAX_HOSTS])
         if probed:
+            # Pipe-delimited (kind|host|doc|title) so the web console can render it
+            # as a proper table; still readable in the raw finding.
             table = '\n'.join(
-                f"{p['kind']:9} {p['host']:38} {('→ doc: ' + p['doc']) if p['doc'] else (p['title'] or '')}"
-                for p in probed
+                f"{p['kind']} | {p['host']} | {p['doc']} | {p['title']}" for p in probed
             )
             findings.append(RawFinding(
                 title='Cartographie des sous-domaines (frontend / API / doc)',
                 severity=FindingSeverity.info.value,
                 description='Type déduit du contenu servi (HTML = frontend, JSON/doc = API) et documentation '
-                            'trouvée. Sonde légère — à confirmer manuellement, uniquement dans le scope.',
-                evidence=table[:2500], fingerprint_seed='subfinder-triage',
+                            'trouvée. Format par ligne : type | sous-domaine | doc | titre. Sonde légère — '
+                            'à confirmer manuellement, uniquement dans le scope.',
+                evidence=table[:4000], fingerprint_seed='subfinder-triage',
             ))
             for p in [x for x in probed if x['doc']]:
                 findings.append(RawFinding(
