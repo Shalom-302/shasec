@@ -66,9 +66,12 @@ async def _validation_exception_handler(request: Request, e: RequestValidationEr
         message = 'json parsing failure'
     else:
         error_input = error.get('input')
-        field = str(error.get('loc')[-1])
+        # A model-level validator (e.g. the target URL check) reports an empty
+        # `loc`, so guard the index — otherwise the handler itself crashes (500).
+        loc = error.get('loc') or ()
+        field = str(loc[-1]) if loc else ''
         error_msg = error.get('msg')
-        message = f'{field} {error_msg} Input:{error_input}' if settings.ENVIRONMENT == 'dev' else error_msg
+        message = f'{field} {error_msg} Input:{error_input}'.strip() if settings.ENVIRONMENT == 'dev' else error_msg
     msg = f'Illegal request parameters: {message}'
     data = {'errors': errors} if settings.ENVIRONMENT == 'dev' else None
     content = {
