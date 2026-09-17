@@ -100,15 +100,27 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
     try:
         ctx = ScanContext(scan_id=scan_id, target_url=target.url, target_type=target.type)
         plugins = get_plugins_for(target.type)
-        await publish_progress(scan_id, 'scanners.start', message=f'{len(plugins)} scanner(s)', total=len(plugins))
+        total_plugins = len(plugins)
+        await publish_progress(scan_id, 'scanners.start', message=f'{total_plugins} scanner(s)', total=total_plugins)
+
+        done_count = 0
+        done_lock = asyncio.Lock()
 
         async def _safe_run(p):
+            await publish_progress(scan_id, 'plugin.start', message=f'{p.name} en cours…', plugin=p.name)
             try:
                 result = p.name, await asyncio.wait_for(p.run(ctx), timeout=p.timeout + 5)
             except Exception as exc:  # noqa: BLE001  — one plugin must never kill the scan
                 log.error(f'shasec plugin {p.name} failed on scan {scan_id}: {exc}')
                 result = p.name, []
-            await publish_progress(scan_id, 'plugin.done', message=p.name)
+            nonlocal done_count
+            async with done_lock:
+                done_count += 1
+                current = done_count
+            await publish_progress(
+                scan_id, 'plugin.done', message=f'{p.name} terminé ({current}/{total_plugins})',
+                plugin=p.name, done=current, total=total_plugins,
+            )
             return result
 
         results = await asyncio.gather(*[_safe_run(p) for p in plugins])

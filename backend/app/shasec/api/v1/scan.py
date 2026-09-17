@@ -9,6 +9,8 @@ from backend.app.shasec.schema.report import GetReportDetails
 from backend.app.shasec.schema.scan import CreateScanParam, GetScanDetails, QuickScanParam
 from backend.app.shasec.service.finding_service import finding_service
 from backend.app.shasec.service.progress import channel as progress_channel
+from backend.app.shasec.service.progress import describe as progress_describe
+from backend.app.shasec.service.progress import snapshot as progress_snapshot
 from backend.app.shasec.service.report_service import report_service
 from backend.app.shasec.service.scan_service import scan_service
 from backend.common.security.jwt import jwt_decode
@@ -164,6 +166,24 @@ async def scan_progress_ws(websocket: WebSocket, pk: Annotated[int, Path(...)]) 
             await pubsub.aclose()
         except Exception:  # noqa: BLE001
             pass
+
+
+@router.get('/{pk}/progress', summary='Scan progress: current phase, percent and steps', dependencies=[DependsJwtAuth])
+async def get_scan_progress(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    """Pull the live progress of a scan over plain HTTP (poll this, or use the
+    WebSocket for push). Returns the current macro-phase (Reconnaissance & scan,
+    Corrélation, Validation contrôlée, Analyse IA…), a 0-100 percent, per-scanner
+    counts (which are done, which are still running), and the ordered step log.
+    """
+    events = await progress_snapshot(pk)
+    db_status = None
+    try:
+        scan = await scan_service.get_by_id(pk=pk)
+        db_status = getattr(scan, 'status', None)
+    except Exception:  # noqa: BLE001 — progress must work even if the row is gone
+        pass
+    data = progress_describe(events, db_status=db_status)
+    return response_base.success(request=request, data=data)
 
 
 @router.get('/{pk}/exploits', summary='Get scan exploit proofs', dependencies=[DependsJwtAuth])
