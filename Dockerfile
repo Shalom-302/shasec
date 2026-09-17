@@ -42,7 +42,14 @@ RUN apt-get update \
         libpq5 curl \
         libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
         libffi8 shared-mime-info fonts-dejavu-core \
+        nmap whois dnsutils \
+        whatweb dirb bash openssl \
     && rm -rf /var/lib/apt/lists/*
+# nmap (port/service recon), whois + dnsutils (dig) power the dns-recon and nmap
+# shasec plugins. whatweb = fingerprinting (Phase 4); dirb ships the common.txt
+# wordlist ffuf uses for content discovery (Phase 5); bash + openssl back
+# testssl.sh (Phase 4). All plugins degrade gracefully when a tool is absent,
+# but baking them in means the recon/fingerprinting phases work out of the box.
 
 # nuclei (ProjectDiscovery) — security scanner binary baked into the image so
 # the shasec nuclei plugin can run. Version is PINNED (no api.github.com call —
@@ -83,6 +90,7 @@ RUN set -eux; \
 # httpx-pd so it never clashes with the Python httpx CLI.
 ARG HTTPX_VERSION=1.9.0
 ARG KATANA_VERSION=1.6.1
+ARG SUBFINDER_VERSION=2.6.6
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends unzip ca-certificates; \
     arch="$(dpkg --print-architecture)"; \
@@ -95,6 +103,29 @@ RUN set -eux; \
         -o /tmp/katana.zip "https://github.com/projectdiscovery/katana/releases/download/v${KATANA_VERSION}/katana_${KATANA_VERSION}_linux_${arch}.zip"; then \
         unzip -o /tmp/katana.zip -d /usr/local/bin katana && chmod +x /usr/local/bin/katana && rm /tmp/katana.zip; \
     else echo "WARNING: katana download failed — the katana plugin will skip at runtime"; fi; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/subfinder.zip "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_${arch}.zip"; then \
+        unzip -o /tmp/subfinder.zip -d /usr/local/bin subfinder && chmod +x /usr/local/bin/subfinder && rm /tmp/subfinder.zip; \
+    else echo "WARNING: subfinder download failed — the subfinder plugin will skip at runtime"; fi; \
+    apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# ffuf (Go, content discovery — Phase 5) + testssl.sh (TLS analysis — Phase 4).
+# Pinned, retried, non-fatal — the plugins skip cleanly when a tool is absent.
+ARG FFUF_VERSION=2.1.0
+ARG TESTSSL_VERSION=3.2.1
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends unzip ca-certificates; \
+    arch="$(dpkg --print-architecture)"; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/ffuf.tar.gz "https://github.com/ffuf/ffuf/releases/download/v${FFUF_VERSION}/ffuf_${FFUF_VERSION}_linux_${arch}.tar.gz"; then \
+        tar -xzf /tmp/ffuf.tar.gz -C /usr/local/bin ffuf && chmod +x /usr/local/bin/ffuf && rm /tmp/ffuf.tar.gz; \
+    else echo "WARNING: ffuf download failed — the ffuf plugin will skip at runtime"; fi; \
+    if curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 \
+        -o /tmp/testssl.tar.gz "https://github.com/drwetter/testssl.sh/archive/refs/tags/v${TESTSSL_VERSION}.tar.gz"; then \
+        mkdir -p /opt && tar -xzf /tmp/testssl.tar.gz -C /opt && \
+        ln -sf "/opt/testssl.sh-${TESTSSL_VERSION}/testssl.sh" /usr/local/bin/testssl.sh && \
+        chmod +x "/opt/testssl.sh-${TESTSSL_VERSION}/testssl.sh" && rm /tmp/testssl.tar.gz; \
+    else echo "WARNING: testssl.sh download failed — the testssl plugin will skip at runtime"; fi; \
     apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # Bring in the pre-built virtualenv (lives outside /app so dev bind-mounts work)
