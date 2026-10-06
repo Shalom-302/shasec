@@ -27,6 +27,7 @@ class TestsslPlugin(ScannerPlugin):
     name = 'testssl'
     handles = ('website', 'api', 'graphql', 'host')
     timeout = 600
+    tier = 'deep'
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         if shutil.which('testssl.sh') is None:

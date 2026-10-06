@@ -57,6 +57,13 @@ class NotFoundError(BaseExceptionMixin):
         super().__init__(msg=msg, data=data, background=background)
 
 
+class ConflictError(BaseExceptionMixin):
+    code = StandardResponseCode.HTTP_409
+
+    def __init__(self, *, msg: str = 'Conflict', data: Any = None, background: BackgroundTask | None = None):
+        super().__init__(msg=msg, data=data, background=background)
+
+
 class ServerError(BaseExceptionMixin):
     code = StandardResponseCode.HTTP_500
 

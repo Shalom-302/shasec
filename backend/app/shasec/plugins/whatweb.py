@@ -18,6 +18,7 @@ class WhatWebPlugin(ScannerPlugin):
     name = 'whatweb'
     handles = ('website', 'api', 'graphql')
     timeout = 120
+    tier = 'fast'
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         if shutil.which('whatweb') is None:

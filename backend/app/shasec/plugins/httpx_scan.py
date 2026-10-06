@@ -17,6 +17,7 @@ class HttpxPlugin(ScannerPlugin):
     name = 'httpx'
     handles = ('website', 'api', 'graphql')
     timeout = 90
+    tier = 'fast'
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         if shutil.which('httpx-pd') is None:

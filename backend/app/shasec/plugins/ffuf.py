@@ -32,6 +32,7 @@ class FfufPlugin(ScannerPlugin):
     name = 'ffuf'
     handles = ('website', 'api', 'graphql')
     timeout = 300
+    tier = 'deep'
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         if shutil.which('ffuf') is None:

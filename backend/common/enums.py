@@ -165,6 +165,57 @@ class ScanStatus(StrEnum):
     failed = "failed"
 
 
+class ExploitAggression(StrEnum):
+    """How hard the exploit stage probes an AUTHORIZED target.
+
+    - ``safe``       : curated, minimal bounded probes (the default).
+    - ``aggressive`` : widen *coverage* — full bounded path/credential lists and
+      a wider (still sequential, self-paced) ID range for BOLA.
+
+    Aggression only ever widens bounded, non-destructive, in-scope probing. It
+    NEVER enables destructive write verbs (that stays behind ``allow_destructive``)
+    and NEVER raises request volume into flood/DoS territory — louder than this
+    requires the shared rate-limiter (not yet built).
+    """
+
+    safe = "safe"
+    aggressive = "aggressive"
+
+
+class ScanProfile(StrEnum):
+    """Depth/speed trade-off for a scan, mapped onto the methodology's staged
+    "chaîne de chasse" (§3): recon fast, escalate to deep only where warranted.
+
+    - ``fast``     : cheap recon/fingerprint plugins only (~seconds to ~2 min).
+    - ``standard`` : fast + the main vuln scanners, minus the heavy long tail.
+    - ``deep``     : everything, including nmap/testssl/ffuf/zap.
+
+    An agent (Hermes) scans ``fast`` first, then requests ``deep`` on the assets
+    that justify it — instead of firing every heavyweight tool on every target.
+    """
+
+    fast = "fast"
+    standard = "standard"
+    deep = "deep"
+
+
+# A plugin runs when the scan's profile rank is >= the plugin's tier rank.
+PROFILE_RANK: dict[str, int] = {
+    ScanProfile.fast.value: 1,
+    ScanProfile.standard.value: 2,
+    ScanProfile.deep.value: 3,
+}
+
+# Overall wall-clock budget (seconds) for the scanner stage per profile. Plugins
+# still running when the budget elapses are cancelled; findings already produced
+# are kept. This is what actually bounds "the scan takes too long".
+PROFILE_BUDGET: dict[str, int] = {
+    ScanProfile.fast.value: 150,
+    ScanProfile.standard.value: 480,
+    ScanProfile.deep.value: 1500,
+}
+
+
 class FindingSeverity(StrEnum):
     """Normalized severity, scanner-agnostic."""
 
@@ -173,6 +224,35 @@ class FindingSeverity(StrEnum):
     medium = "medium"
     low = "low"
     info = "info"
+
+
+class FindingConfidence(StrEnum):
+    """How sure we are a finding is real.
+
+    Methodology (Kaanari "Chasse aux Sorcières" §14): every finding carries a
+    confidence. An AI agent (Hermes) must declare it instead of asserting impact
+    — low until corroborated, high only when a proof row backs it.
+    """
+
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+
+class FindingStatus(StrEnum):
+    """Lifecycle of a finding (methodology §14).
+
+    A scanner observation enters as ``suspected``; it only becomes ``confirmed``
+    when a proof (an Exploit row) demonstrates it. This separation — observed vs.
+    potential — is what keeps an autonomous agent's work honest.
+    """
+
+    suspected = "suspected"
+    confirmed = "confirmed"
+    false_positive = "false_positive"
+    stopped = "stopped"
+    fixed = "fixed"
+    retest_required = "retest_required"
 
 
 class ReportFormat(StrEnum):

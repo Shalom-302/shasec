@@ -32,6 +32,17 @@ _INTERESTING = re.compile(
 # Names that strongly hint at an API/backend surface (worth probing doc paths).
 _API_NAME = re.compile(r'^(api|apis|backend|back|gw|gateway|rest|graphql|gql|service|svc|ms|core)\b', re.I)
 
+# Server/product banners (Server, X-Powered-By, or body) that identify a backend
+# *service* rather than a browser frontend — these never serve a real UI.
+_SERVICE_SIGNS = re.compile(
+    r'minio|kestrel|gunicorn|uvicorn|werkzeug|express|traefik|kong|envoy|hypercorn|'
+    r'grafana|kibana|prometheus|jenkins|gitlab|harbor|registry|rabbitmq|keycloak|'
+    r'phpmyadmin|adminer|jetty|tomcat|wildfly|hasura|supabase|amazons3|couchdb',
+    re.I,
+)
+# Endpoints that, if they answer JSON, prove an API even when "/" is opaque.
+_API_PROBE_PATHS = ('/health', '/healthz', '/api', '/api/v1', '/v1', '/status', '/metrics', '/actuator/health')
+
 # Curated documentation paths, ordered by how definitive they are.
 _DOC_PATHS = (
     '/openapi.json', '/swagger.json', '/v3/api-docs', '/v2/api-docs', '/api-docs',
@@ -142,6 +153,7 @@ class SubfinderPlugin(ScannerPlugin):
     async def _probe(client: httpx.AsyncClient, host: str) -> dict:
         info = {'host': host, 'reachable': False, 'kind': 'inconnu', 'title': '', 'doc': ''}
         base = None
+        resp = None
         for scheme in ('https', 'http'):
             try:
                 resp = await client.get(f'{scheme}://{host}/')
@@ -155,13 +167,50 @@ class SubfinderPlugin(ScannerPlugin):
 
         ctype = resp.headers.get('content-type', '').lower()
         body = resp.text[:2000] if resp.content else ''
-        if 'json' in ctype or body.lstrip().startswith(('{', '[')):
+        stripped = body.lstrip()
+        banner = f"{resp.headers.get('server', '')} {resp.headers.get('x-powered-by', '')}".strip()
+        www_auth = resp.headers.get('www-authenticate', '')
+
+        # 1. Content-type / body shape — the strongest signal.
+        if 'json' in ctype or stripped.startswith(('{', '[')):
             info['kind'] = 'api'
         elif 'html' in ctype:
             info['kind'] = 'frontend'
             m = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.S)
             if m:
                 info['title'] = m.group(1).strip()[:60]
+        elif 'xml' in ctype or stripped.startswith('<?xml'):
+            # S3 / MinIO / SOAP-style backends answer XML, never a browser UI.
+            info['kind'] = 'api'
+
+        # 2. Auth-gated root (challenge or 401/403) is a live service, not a dead host.
+        if info['kind'] == 'inconnu' and (www_auth or resp.status_code in (401, 403)):
+            info['kind'] = 'api'
+
+        # 3. Recognisable product/server banner classifies the opaque cases.
+        sign = _SERVICE_SIGNS.search(banner) or _SERVICE_SIGNS.search(body)
+        if sign:
+            info['title'] = info['title'] or sign.group(0)
+            if info['kind'] == 'inconnu':
+                info['kind'] = 'api'
+        elif not info['title'] and banner:
+            info['title'] = banner[:40]
+
+        # 4. Still opaque? Ask a few API-ish endpoints directly.
+        if info['kind'] == 'inconnu':
+            for path in _API_PROBE_PATHS:
+                try:
+                    r = await client.get(f'{base}{path}')
+                except httpx.HTTPError:
+                    continue
+                pct = r.headers.get('content-type', '').lower()
+                if r.status_code < 500 and ('json' in pct or (r.content and r.text.lstrip()[:1] in '{[')):
+                    info['kind'] = 'api'
+                    break
+
+        # 5. Name-based last resort: an api-*/gw-* host that answered anything is a backend.
+        if info['kind'] == 'inconnu' and _API_NAME.search(host.split('.')[0]):
+            info['kind'] = 'api'
 
         # Probe doc paths when the host looks like an API (by content or by name).
         if info['kind'] == 'api' or _API_NAME.search(host.split('.')[0]):

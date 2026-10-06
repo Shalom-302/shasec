@@ -46,6 +46,9 @@ class ScannerPlugin(ABC):
     handles: tuple[str, ...] = ()
     #: hard timeout for a single run, in seconds
     timeout: int = 120
+    #: scan-profile tier: 'fast' (cheap recon), 'standard' (default), or 'deep'
+    #: (heavy long tail). A plugin runs when scan_profile_rank >= tier_rank.
+    tier: str = 'standard'
 
     def supports(self, target_type: str) -> bool:
         return not self.handles or target_type in self.handles
@@ -74,4 +77,13 @@ async def run_command(args: list[str], timeout: int, stdin: bytes | None = None)
         proc.kill()
         await proc.wait()
         raise TimeoutError(f'command timed out after {timeout}s: {args[0]}')
+    except asyncio.CancelledError:
+        # The scanner stage hit its overall budget and cancelled us — don't leak
+        # the subprocess: kill it before the cancellation propagates.
+        proc.kill()
+        try:
+            await proc.wait()
+        except Exception:  # noqa: BLE001
+            pass
+        raise
     return proc.returncode or 0, out.decode(errors='replace'), err.decode(errors='replace')

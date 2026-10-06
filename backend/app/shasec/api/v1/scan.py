@@ -55,7 +55,11 @@ async def quick_scan(request: Request, obj: QuickScanParam) -> ResponseModel:
     scan = await scan_service.quick(
         url=obj.url, type=obj.type, name=obj.name,
         allow_active_exploitation=obj.allow_active_exploitation,
+        profile=obj.profile,
+        aggression=obj.aggression,
         auth_token=obj.auth_token,
+        id_range=obj.id_range,
+        allow_destructive=obj.allow_destructive,
     )
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)

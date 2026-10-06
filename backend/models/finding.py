@@ -1,7 +1,7 @@
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.common.enums import FindingSeverity
+from backend.common.enums import FindingConfidence, FindingSeverity, FindingStatus
 from backend.common.model import Base, get_id, id_key
 
 
@@ -24,6 +24,17 @@ class Finding(Base):
     title: Mapped[str] = mapped_column(sa.String(512))
     severity: Mapped[str] = mapped_column(
         sa.String(16), default=FindingSeverity.info.value, comment='critical / high / medium / low / info'
+    )
+    # Methodology §14 — a finding is an *observation* until proven. It enters
+    # ``suspected`` with ``low`` confidence; a proof (Exploit row) promotes it.
+    # Forcing an agent to set these keeps "observed" distinct from "potential".
+    confidence: Mapped[str] = mapped_column(
+        sa.String(16), default=FindingConfidence.low.value, comment='low / medium / high'
+    )
+    status: Mapped[str] = mapped_column(
+        sa.String(32),
+        default=FindingStatus.suspected.value,
+        comment='suspected / confirmed / false_positive / stopped / fixed / retest_required',
     )
     description: Mapped[str | None] = mapped_column(sa.Text, default=None)
     evidence: Mapped[str | None] = mapped_column(sa.Text, default=None)

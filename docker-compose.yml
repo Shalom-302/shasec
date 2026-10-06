@@ -112,6 +112,9 @@ services:
       -config api.key=${ZAP_API_KEY:-shasec-zap}
       -config api.addrs.addr.name=.*
       -config api.addrs.addr.regex=true
+      -silent
+      -config start.checkForUpdates=0
+      -config start.checkAddonUpdates=0
     networks:
       - monshaapi
 

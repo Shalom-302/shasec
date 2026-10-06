@@ -34,6 +34,9 @@ _SYSTEM_PROMPT = (
     "mais l'exposition de données reste À CONFIRMER — dis-le explicitement, n'affirme PAS "
     "que des mots de passe/tokens/secrets ont fuité.\n"
     "4) N'invente aucune faille ni aucun impact non étayé par les preuves fournies.\n"
+    "5) Respecte le statut fourni : un élément 'suspected' est une OBSERVATION à "
+    "confirmer, pas une vulnérabilité acquise ; ne présente comme avéré que ce qui "
+    "est 'confirmed'. Pondère ton propos par le champ 'confidence' (low/medium/high).\n"
     "SCORE (entier 0-100, plus haut = plus sûr) cohérent avec la sévérité réelle : aucune "
     "preuve high/critical => score >= 60 ; uniquement de l'hygiène (en-têtes, bannière, docs) "
     "=> score >= 75.\n"
@@ -58,11 +61,12 @@ def _build_payload(target, findings: list, exploits: list) -> dict:
         'target': {'url': target.url, 'type': target.type} if target else {},
         'findings': [
             {'severity': f.severity, 'title': f.title, 'plugin': f.plugin,
+             'confidence': f.confidence, 'status': f.status,
              'description': f.description} for f in findings
         ],
         'exploits': [
             {'severity': e.severity, 'category': e.category, 'title': e.title,
-             'confirmed': e.confirmed, 'impact': e.impact,
+             'confirmed': e.confirmed, 'status': e.status, 'impact': e.impact,
              # let the model see whether real data came back vs an empty body ([] / {})
              'response_excerpt': (e.response or '')[:160]} for e in exploits
         ],

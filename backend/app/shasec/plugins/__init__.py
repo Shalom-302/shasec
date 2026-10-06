@@ -40,5 +40,16 @@ def get_plugins() -> list[ScannerPlugin]:
     return list(_REGISTRY.values())
 
 
-def get_plugins_for(target_type: str) -> list[ScannerPlugin]:
-    return [p for p in get_plugins() if p.supports(target_type)]
+def get_plugins_for(target_type: str, profile: str = 'standard') -> list[ScannerPlugin]:
+    """Plugins handling ``target_type`` whose tier is within the scan ``profile``.
+
+    A plugin runs when PROFILE_RANK[profile] >= PROFILE_RANK[plugin.tier], so
+    ``fast`` runs only fast-tier plugins and ``deep`` runs everything.
+    """
+    from backend.common.enums import PROFILE_RANK
+
+    ceiling = PROFILE_RANK.get(profile, PROFILE_RANK['standard'])
+    return [
+        p for p in get_plugins()
+        if p.supports(target_type) and PROFILE_RANK.get(getattr(p, 'tier', 'standard'), 2) <= ceiling
+    ]

@@ -109,9 +109,7 @@ SHASEC apporte quatre choses :
 ### 0.4 Méthodologie
 
 On construit par **incréments livrables** (chaque phase est testable seule), et
-on **prouve sur une vraie cible** à chaque étape. Le fil rouge de ce cours est
-une API FastAPI réelle en production, `faithapi.kortexai.dev`, propriété de
-l'auteur — donc autorisée.
+on **prouve sur une vraie cible** à chaque étape.
 
 ---
 

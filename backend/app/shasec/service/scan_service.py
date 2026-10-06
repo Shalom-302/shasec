@@ -32,24 +32,25 @@ async def _get_arq_pool():
     return _arq_pool
 
 
-def _run_in_process(scan_id: int, auth_token: str | None = None) -> None:
-    task = asyncio.create_task(run_pipeline(scan_id, auth_token=auth_token))
+def _run_in_process(scan_id: int, auth_token: str | None = None, options: dict | None = None) -> None:
+    task = asyncio.create_task(run_pipeline(scan_id, auth_token=auth_token, options=options))
     _RUNNING.add(task)
     task.add_done_callback(_RUNNING.discard)
 
 
-async def _dispatch(scan_id: int, auth_token: str | None = None) -> None:
+async def _dispatch(scan_id: int, auth_token: str | None = None, options: dict | None = None) -> None:
     """Durable execution via the arq worker when enabled; otherwise (or if the
-    queue is unreachable) run in-process. auth_token is passed transiently and
-    never persisted, so authenticated exploit modules (JWT, BFLA) can use it."""
+    queue is unreachable) run in-process. auth_token and options are passed
+    transiently and never persisted, so authenticated exploit modules (JWT, BFLA)
+    and per-scan knobs (id_range, allow_destructive) can use them."""
     if settings.SHASEC_USE_ARQ:
         try:
             pool = await _get_arq_pool()
-            await pool.enqueue_job('run_scan_job', scan_id, auth_token)
+            await pool.enqueue_job('run_scan_job', scan_id, auth_token, options)
             return
         except Exception as exc:  # noqa: BLE001 — never block scan creation on the queue
             log.warning(f'arq enqueue failed for scan {scan_id} ({exc}); running in-process')
-    _run_in_process(scan_id, auth_token=auth_token)
+    _run_in_process(scan_id, auth_token=auth_token, options=options)
 
 
 class ScanService:
@@ -83,7 +84,9 @@ class ScanService:
             if not scan:
                 raise errors.NotFoundError(msg='Scan not found')
             if scan.status != ScanStatus.pending.value:
-                raise errors.ForbiddenError(msg=f'Scan is not startable (status={scan.status})')
+                # Already started/finished: idempotent guard, surfaced as 409 so a
+                # retried start is a clear conflict, never a second run.
+                raise errors.ConflictError(msg=f'Scan already started (status={scan.status})')
             target = await target_dao.get(db, scan.target_id)
             if not target:
                 raise errors.NotFoundError(msg='Target not found')
@@ -91,6 +94,13 @@ class ScanService:
                 raise errors.ForbiddenError(
                     msg='Target is not authorized for scanning. Authorize the target first.'
                 )
+            # Atomically claim the scan (pending -> running) BEFORE dispatch. The
+            # read above gives clear errors on the common path; this conditional
+            # update closes the race between two concurrent starts — only the
+            # caller that flips the row proceeds, the loser's rowcount is 0.
+            claimed = await scan_dao.claim_for_start(db, pk)
+            if claimed == 0:
+                raise errors.ConflictError(msg='Scan already started (concurrent start)')
 
         await _dispatch(pk)
 
@@ -100,7 +110,8 @@ class ScanService:
     @staticmethod
     async def quick(
         *, url: str, type: str, name: str | None = None, allow_active_exploitation: bool = False,
-        auth_token: str | None = None,
+        profile: str = 'standard', aggression: str = 'safe',
+        auth_token: str | None = None, id_range: str | None = None, allow_destructive: bool = False,
     ) -> Scan:
         """One-shot: from a URL, create-or-reuse the target, create the scan and
         start it. The URL still lands on a Target row (so history is preserved);
@@ -119,12 +130,19 @@ class ScanService:
             await db.flush()
             scan = await scan_dao.create(
                 db,
-                CreateScanParam(target_id=target.id, allow_active_exploitation=allow_active_exploitation),
+                CreateScanParam(
+                    target_id=target.id,
+                    allow_active_exploitation=allow_active_exploitation,
+                    profile=profile,
+                ),
             )
             await db.flush()  # populate scan.id before the transaction commits
             scan_id = scan.id
 
-        await _dispatch(scan_id, auth_token=auth_token)
+        options = {'allow_destructive': bool(allow_destructive), 'aggression': aggression}
+        if id_range:
+            options['id_range'] = id_range
+        await _dispatch(scan_id, auth_token=auth_token, options=options)
 
         async with async_db_session() as db:
             return await scan_dao.get(db, scan_id)

@@ -9,7 +9,7 @@ from backend.app.shasec.service.ai_service import ai_service
 from backend.app.shasec.service.progress import publish as publish_progress
 from backend.app.shasec.verifier import get_modules_for
 from backend.app.shasec.verifier.base import ExploitContext
-from backend.common.enums import SEVERITY_WEIGHT, ScanStatus
+from backend.common.enums import PROFILE_BUDGET, SEVERITY_WEIGHT, FindingStatus, ScanProfile, ScanStatus
 from backend.common.log import log
 from backend.core.conf import settings
 from backend.crud.crud_exploit import exploit_dao
@@ -18,6 +18,34 @@ from backend.crud.crud_scan import scan_dao
 from backend.crud.crud_target import target_dao
 from backend.database.db_postgres import async_db_session
 from backend.utils.timezone import timezone
+
+
+# Aggressive-mode coverage expansion. Bounded curated lists — more surface, not
+# more volume. Destructive writes are NEVER enabled here.
+_AGGR_BYPASS_PATHS = (
+    '/admin', '/administrator', '/dashboard', '/internal', '/manage', '/config',
+    '/debug', '/actuator', '/actuator/env', '/api/admin', '/private', '/console',
+    '/metrics', '/swagger', '/swagger-ui', '/.git/config', '/backup',
+)
+_AGGR_LOGIN_PATHS = (
+    '/admin', '/login', '/admin/login', '/administrator', '/user/login',
+    '/signin', '/auth', '/account/login', '/api/v2/login',
+)
+
+
+def _amplify_options(options: dict | None) -> dict:
+    """When ``aggression == 'aggressive'``, widen BOUNDED coverage defaults the
+    verifier modules already honor. Never enables destructive writes; never
+    raises request volume into flood territory (BOLA stays sequential/self-paced).
+    """
+    opts = dict(options or {})
+    if opts.get('aggression') == 'aggressive':
+        opts.setdefault('id_range', '1-50')
+        opts.setdefault('bypass_paths', list(_AGGR_BYPASS_PATHS))
+        opts.setdefault('login_paths', list(_AGGR_LOGIN_PATHS))
+        # allow_destructive is deliberately left untouched — aggression must never
+        # turn on write verbs.
+    return opts
 
 
 def _fingerprint(target_url: str, rf: RawFinding) -> str:
@@ -38,12 +66,20 @@ def _aggregate(target_url: str, tagged: list[tuple[str, RawFinding]]) -> list[tu
 
 
 async def _run_exploit_stage(
-    scan_id: int, target_url: str, target_type: str, auth_token: str | None = None
+    scan_id: int, target_url: str, target_type: str, auth_token: str | None = None,
+    options: dict | None = None,
 ) -> None:
     """Run the consented exploit modules and persist proofs. Never raises — a
-    failing module must not fail the scan."""
+    failing module must not fail the scan.
+
+    ``options`` carries transient, per-scan knobs the exploit modules read
+    (e.g. ``id_range`` for BOLA, ``allow_destructive`` for verb-tampering). Never
+    persisted — passed through like ``auth_token`` so a destructive opt-in can
+    never linger on a stored row.
+    """
     ectx = ExploitContext(
-        scan_id=scan_id, target_url=target_url, target_type=target_type, auth_token=auth_token
+        scan_id=scan_id, target_url=target_url, target_type=target_type, auth_token=auth_token,
+        options=_amplify_options(options),
     )
     modules = get_modules_for(target_type)
 
@@ -69,6 +105,9 @@ async def _run_exploit_stage(
                     title=r.title,
                     severity=r.severity,
                     confirmed=r.confirmed,
+                    # §14 lifecycle: a proven module result is confirmed, the rest
+                    # stay suspected until corroborated.
+                    status=(FindingStatus.confirmed if r.confirmed else FindingStatus.suspected).value,
                     impact=r.impact,
                     request=r.request,
                     response=r.response,
@@ -78,7 +117,7 @@ async def _run_exploit_stage(
     log.info(f'shasec scan {scan_id} exploit stage: {confirmed}/{len(tagged)} confirmed proof(s)')
 
 
-async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
+async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dict | None = None) -> None:
     """Execute the full scan pipeline for one scan and persist its findings.
 
     Phase 1: runs inline as an asyncio task (fire-and-forget from the API). The
@@ -98,10 +137,16 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
     await publish_progress(scan_id, 'started', message=f'Scan de {target.url} démarré')
 
     try:
+        profile = (scan.profile or ScanProfile.standard.value)
+        budget = PROFILE_BUDGET.get(profile, PROFILE_BUDGET[ScanProfile.standard.value])
         ctx = ScanContext(scan_id=scan_id, target_url=target.url, target_type=target.type)
-        plugins = get_plugins_for(target.type)
+        plugins = get_plugins_for(target.type, profile)
         total_plugins = len(plugins)
-        await publish_progress(scan_id, 'scanners.start', message=f'{total_plugins} scanner(s)', total=total_plugins)
+        await publish_progress(
+            scan_id, 'scanners.start',
+            message=f'{total_plugins} scanner(s) · profil {profile} · budget {budget}s',
+            total=total_plugins, profile=profile, budget=budget,
+        )
 
         done_count = 0
         done_lock = asyncio.Lock()
@@ -123,7 +168,24 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
             )
             return result
 
-        results = await asyncio.gather(*[_safe_run(p) for p in plugins])
+        # Budget-bounded scanner stage: run all selected plugins concurrently but
+        # never let the slow tail exceed the profile's wall-clock budget. Plugins
+        # still running at the deadline are cancelled; whatever already produced
+        # findings is kept, so a hung scanner can't hold the whole scan hostage.
+        tasks = [asyncio.create_task(_safe_run(p)) for p in plugins]
+        done, pending = await asyncio.wait(tasks, timeout=budget) if tasks else (set(), set())
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+            log.warning(
+                f'shasec scan {scan_id}: {len(pending)} plugin(s) cancelled at budget {budget}s (profile {profile})'
+            )
+            await publish_progress(
+                scan_id, 'scanners.budget',
+                message=f'{len(pending)} scanner(s) arrêté(s) au budget {budget}s', cancelled=len(pending),
+            )
+        results = [t.result() for t in done if not t.cancelled() and t.exception() is None]
         tagged = [(name, rf) for name, rfs in results for rf in rfs]
         aggregated = _aggregate(target.url, tagged)
         await publish_progress(scan_id, 'scanners.done', message=f'{len(aggregated)} finding(s)', count=len(aggregated))
@@ -149,7 +211,7 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None) -> None:
         # and records each request/response as proof.
         if scan.allow_active_exploitation and target.is_authorized:
             await publish_progress(scan_id, 'exploit.start', message='Exploitation active…')
-            await _run_exploit_stage(scan_id, target.url, target.type, auth_token)
+            await _run_exploit_stage(scan_id, target.url, target.type, auth_token, options)
             await publish_progress(scan_id, 'exploit.done', message='Preuves collectées')
 
         # AI analysis stage (Phase 3) — interprets the findings + proofs into a

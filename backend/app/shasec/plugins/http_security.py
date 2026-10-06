@@ -43,6 +43,7 @@ class HttpSecurityPlugin(ScannerPlugin):
     name = 'http-security'
     handles = ('website', 'api', 'graphql')
     timeout = 30
+    tier = 'fast'
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         findings: list[RawFinding] = []

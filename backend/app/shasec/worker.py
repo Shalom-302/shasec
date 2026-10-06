@@ -24,9 +24,11 @@ def redis_settings() -> RedisSettings:
     )
 
 
-async def run_scan_job(ctx: dict, scan_id: int, auth_token: str | None = None) -> None:
+async def run_scan_job(
+    ctx: dict, scan_id: int, auth_token: str | None = None, options: dict | None = None
+) -> None:
     log.info(f'[arq] running scan {scan_id} (job {ctx.get("job_id")})')
-    await run_pipeline(scan_id, auth_token=auth_token)
+    await run_pipeline(scan_id, auth_token=auth_token, options=options)
 
 
 class WorkerSettings:

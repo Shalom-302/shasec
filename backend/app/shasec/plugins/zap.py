@@ -27,7 +27,8 @@ class ZapPlugin(ScannerPlugin):
 
     name = 'zap'
     handles = ('website', 'api', 'graphql')
-    timeout = 1800  # active scans are slow
+    timeout = 600  # active scans are slow; capped and gated to the deep profile
+    tier = 'deep'
 
     @property
     def _base(self) -> str:

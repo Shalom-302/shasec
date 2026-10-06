@@ -38,6 +38,7 @@ class NmapPlugin(ScannerPlugin):
     name = 'nmap'
     handles = ('host', 'website', 'api', 'graphql')
     timeout = 600
+    tier = 'deep'
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         host = _host_of(ctx.target_url)

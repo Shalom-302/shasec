@@ -4,7 +4,7 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.common.enums import ScanStatus
+from backend.common.enums import ScanProfile, ScanStatus
 from backend.common.model import Base, get_id, id_key
 
 
@@ -25,6 +25,11 @@ class Scan(Base):
     )
     status: Mapped[str] = mapped_column(
         sa.String(16), default=ScanStatus.pending.value, comment='pending / running / completed / failed'
+    )
+    # Depth/speed profile (methodology §3 staged hunt). Controls which plugin
+    # tiers run and the scanner-stage wall-clock budget.
+    profile: Mapped[str] = mapped_column(
+        sa.String(16), default=ScanProfile.standard.value, comment='fast / standard / deep'
     )
     # Explicit consent to run the active-exploitation stage (sends attack
     # payloads, not just reads). OFF by default — scanning never implies it.
