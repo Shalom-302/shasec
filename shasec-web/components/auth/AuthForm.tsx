@@ -1,0 +1,70 @@
+'use client';
+
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { authCall } from '@/lib/api';
+
+export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
+  const params = useSearchParams();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const isRegister = mode === 'register';
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr('');
+    if (isRegister && password.length < 8) return setErr('Le mot de passe doit contenir au moins 8 caractères.');
+    if (isRegister && password !== confirm) return setErr('Les mots de passe ne correspondent pas.');
+    setBusy(true);
+    try {
+      await authCall(mode, { email, password });
+      const next = params.get('next');
+      // Only same-site relative paths: never an open redirect.
+      window.location.href = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+    } catch (e: any) {
+      setErr(e.status === 429 ? 'Trop de tentatives. Patientez une minute puis réessayez.' : e.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="card space-y-4" noValidate>
+      <div>
+        <h1 className="text-lg font-bold">{isRegister ? 'Créer un compte' : 'Connexion'}</h1>
+        {isRegister && (
+          <p className="mt-1 text-sm text-kx-muted">3 scans de découverte offerts à l’inscription.</p>
+        )}
+      </div>
+      {params.get('expired') && !isRegister && (
+        <p className="alert-info">Votre session a expiré, reconnectez-vous.</p>
+      )}
+      <div>
+        <label className="label" htmlFor="email">Email</label>
+        <input id="email" className="input" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
+      </div>
+      <div>
+        <label className="label" htmlFor="password">Mot de passe</label>
+        <input id="password" className="input" type="password" required minLength={isRegister ? 8 : undefined}
+          autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} />
+      </div>
+      {isRegister && (
+        <div>
+          <label className="label" htmlFor="confirm">Confirmer le mot de passe</label>
+          <input id="confirm" className="input" type="password" required autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} />
+        </div>
+      )}
+      {err && <p className="alert-err" role="alert">{err}</p>}
+      <button className="btn w-full" disabled={busy || !email || !password}>
+        {busy ? 'Patientez…' : isRegister ? 'Créer mon compte' : 'Se connecter'}
+      </button>
+      <p className="text-center text-sm text-kx-muted">
+        {isRegister ? <>Déjà inscrit ? <Link className="text-kx-accent hover:underline" href="/login">Se connecter</Link></>
+          : <>Pas encore de compte ? <Link className="text-kx-accent hover:underline" href="/register">Créer un compte</Link></>}
+      </p>
+    </form>
+  );
+}

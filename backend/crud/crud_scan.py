@@ -17,9 +17,12 @@ class CRUDScan(CRUDBase[Scan]):
     async def get_all(self, db: AsyncSession) -> Sequence[Scan]:
         return await self.select_models(db)
 
-    async def get_list(self, target_id: int = None, status: str = None) -> Select:
+    async def get_list(self, target_id: int = None, status: str = None, owner_id: int | None = None) -> Select:
+        """``owner_id`` set = tenant-scoped listing; None = every row (admins)."""
         stmt = select(self.model).order_by(desc(self.model.created_time))
         where_list = []
+        if owner_id is not None:
+            where_list.append(self.model.owner_id == owner_id)
         if target_id:
             where_list.append(self.model.target_id == target_id)
         if status:
@@ -28,8 +31,8 @@ class CRUDScan(CRUDBase[Scan]):
             stmt = stmt.where(*where_list)
         return stmt
 
-    async def create(self, db: AsyncSession, obj_in: CreateScanParam) -> Scan:
-        return await self.create_model(db, obj_in)
+    async def create(self, db: AsyncSession, obj_in: CreateScanParam, owner_id: int | None = None) -> Scan:
+        return await self.create_model(db, obj_in, owner_id=owner_id)
 
     async def update(self, db: AsyncSession, pk: int, obj_in: dict) -> int:
         return await self.update_model(db, pk, obj_in)

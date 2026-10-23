@@ -6,6 +6,7 @@ from backend.app.shasec.plugins.base import RawFinding, ScanContext
 from backend.app.shasec.schema.exploit import CreateExploitParam
 from backend.app.shasec.schema.finding import CreateFindingParam
 from backend.app.shasec.service.ai_service import ai_service
+from backend.app.shasec.service.credit_service import credit_service
 from backend.app.shasec.service.progress import publish as publish_progress
 from backend.app.shasec.verifier import get_modules_for
 from backend.app.shasec.verifier.base import ExploitContext
@@ -241,3 +242,5 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dic
                     'completed_at': timezone.now(),
                 },
             )
+            # A failed scan never costs the customer: give back what it debited.
+            await credit_service.refund_scan(db, scan_id)

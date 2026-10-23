@@ -3,6 +3,7 @@ from fastapi.security import HTTPBasicCredentials
 from datetime import datetime
 from starlette.background import BackgroundTask, BackgroundTasks
 
+from backend.app.shasec.service.credit_service import credit_service
 from backend.crud.crud_user import user_dao
 from backend.models.user import User
 from backend.app.admin.schema.token import GetLoginToken, GetNewToken
@@ -54,7 +55,9 @@ class AuthService:
             if email:
                 raise errors.ForbiddenError(msg=translator.t('auth.exist'))
             
-            new_user = await user_dao.add(db, obj)
+            new_user = await user_dao.add(db, obj, role_name=settings.REGISTER_DEFAULT_ROLE)
+            # Kortex free tier: one-shot discovery scans, granted once per account.
+            await credit_service.grant_signup(db, new_user.id)
 
             # current_user_id = new_user.x_id
             # is_multi_login = new_user.is_multi_login

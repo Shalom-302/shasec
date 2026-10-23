@@ -76,6 +76,21 @@ class Settings(BaseSettings):
     # the queue can't be reached. Requires a running `arq ...worker.WorkerSettings`.
     SHASEC_USE_ARQ: bool = False
 
+    # Kortex Security SaaS — accounts, credits and target ownership.
+    # Role given to self-registered accounts. Admins (role "admin") see every
+    # tenant's data, are never billed and may use active exploitation.
+    REGISTER_DEFAULT_ROLE: str = 'user'
+    # Free tier: one-shot discovery scans per account (never renewed).
+    CREDITS_FREE_SCANS: int = 3
+    # Profiles a free discovery scan may use (deep is credits-only).
+    CREDITS_FREE_PROFILES: list[str] = ['fast', 'standard']
+    # Credit price of one scan, per profile.
+    CREDITS_COST_FAST: int = 1
+    CREDITS_COST_STANDARD: int = 2
+    CREDITS_COST_DEEP: int = 4
+    # Ownership proof: the owner serves the target's verify token at this path.
+    TARGET_VERIFY_PATH: str = '/.well-known/kortex-security-verify.txt'
+
     # SMTP / email (optional: leave blank to disable outgoing mail)
     SMTP_TLS: str = 'True'
     SMTP_PORT: str = '587'

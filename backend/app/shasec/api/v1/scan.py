@@ -12,8 +12,13 @@ from backend.app.shasec.service.progress import channel as progress_channel
 from backend.app.shasec.service.progress import describe as progress_describe
 from backend.app.shasec.service.progress import snapshot as progress_snapshot
 from backend.app.shasec.service.report_service import report_service
+from backend.app.shasec.service.access import Actor, actor_from
 from backend.app.shasec.service.scan_service import scan_service
-from backend.common.security.jwt import jwt_decode
+from backend.common.enums import ScanBilling
+from backend.common.exception import errors
+from backend.common.enums import Role as RoleEnum
+from backend.common.security.jwt import get_current_user, jwt_authentication
+from backend.database.db_postgres import async_db_session
 from backend.database.db_redis import redis_client
 from backend.common.pagination import DependsPagination, paging_data
 from backend.common.response.response_schema import ResponseModel, response_base
@@ -24,9 +29,23 @@ from backend.utils.serializers import select_as_dict, select_list_serialize
 router = APIRouter(prefix='/scans', tags=['Scan'])
 
 
+async def _owned_scan(request: Request, pk: int):
+    """Tenant gate for every per-scan route (404 if not the caller's)."""
+    return await scan_service.get_by_id(actor=actor_from(request), pk=pk)
+
+
+async def _reportable_scan(request: Request, pk: int):
+    scan = await _owned_scan(request, pk)
+    if scan.billing == ScanBilling.free.value:
+        raise errors.PaymentRequiredError(
+            msg='Les rapports détaillés sont réservés aux scans payés en crédits.'
+        )
+    return scan
+
+
 @router.get('/{pk}', summary='Get scan by ID', dependencies=[DependsJwtAuth])
 async def get_scan(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
-    scan = await scan_service.get_by_id(pk=pk)
+    scan = await _owned_scan(request, pk)
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)
 
@@ -38,14 +57,14 @@ async def get_pagination_scans(
     target_id: Annotated[int | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
 ) -> ResponseModel:
-    scan_select = await scan_service.get_select(target_id=target_id, status=status)
+    scan_select = await scan_service.get_select(actor=actor_from(request), target_id=target_id, status=status)
     page_data = await paging_data(db, scan_select, GetScanDetails)
     return response_base.success(request=request, data=page_data)
 
 
 @router.post('/', summary='Create scan', dependencies=[DependsJwtAuth])
 async def create_scan(request: Request, obj: CreateScanParam) -> ResponseModel:
-    scan = await scan_service.create(obj=obj)
+    scan = await scan_service.create(actor=actor_from(request), obj=obj)
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)
 
@@ -53,7 +72,7 @@ async def create_scan(request: Request, obj: CreateScanParam) -> ResponseModel:
 @router.post('/quick', summary='Quick scan from a URL', dependencies=[DependsJwtAuth])
 async def quick_scan(request: Request, obj: QuickScanParam) -> ResponseModel:
     scan = await scan_service.quick(
-        url=obj.url, type=obj.type, name=obj.name,
+        actor=actor_from(request), url=obj.url, type=obj.type, name=obj.name,
         allow_active_exploitation=obj.allow_active_exploitation,
         profile=obj.profile,
         aggression=obj.aggression,
@@ -67,14 +86,14 @@ async def quick_scan(request: Request, obj: QuickScanParam) -> ResponseModel:
 
 @router.post('/{pk}/start', summary='Start scan', dependencies=[DependsJwtAuth])
 async def start_scan(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
-    scan = await scan_service.start(pk=pk)
+    scan = await scan_service.start(actor=actor_from(request), pk=pk)
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)
 
 
 @router.post('/{pk}/cancel', summary='Cancel scan', dependencies=[DependsJwtAuth])
 async def cancel_scan(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
-    count = await scan_service.cancel(pk=pk)
+    count = await scan_service.cancel(actor=actor_from(request), pk=pk)
     if count > 0:
         return response_base.success(request=request)
     return response_base.fail(request=request)
@@ -82,7 +101,7 @@ async def cancel_scan(request: Request, pk: Annotated[int, Path(...)]) -> Respon
 
 @router.delete('/', summary='Delete scans', dependencies=[DependsJwtAuth])
 async def delete_scans(request: Request, pk: Annotated[list[int], Query(...)]) -> ResponseModel:
-    count = await scan_service.delete(pk=pk)
+    count = await scan_service.delete(actor=actor_from(request), pk=pk)
     if count > 0:
         return response_base.success(request=request)
     return response_base.fail(request=request)
@@ -90,6 +109,7 @@ async def delete_scans(request: Request, pk: Annotated[list[int], Query(...)]) -
 
 @router.get('/{pk}/findings', summary='Get scan findings', dependencies=[DependsJwtAuth])
 async def get_scan_findings(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    await _owned_scan(request, pk)
     findings = await finding_service.get_by_scan(scan_id=pk)
     data = select_list_serialize(findings)
     return response_base.success(request=request, data=data)
@@ -97,6 +117,7 @@ async def get_scan_findings(request: Request, pk: Annotated[int, Path(...)]) -> 
 
 @router.get('/{pk}/analysis', summary='Get scan AI analysis', dependencies=[DependsJwtAuth])
 async def get_scan_analysis(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    await _owned_scan(request, pk)
     analysis = await finding_service.get_analysis(scan_id=pk)
     data = GetAIAnalysisDetails(**select_as_dict(analysis)) if analysis else None
     return response_base.success(request=request, data=data)
@@ -104,6 +125,7 @@ async def get_scan_analysis(request: Request, pk: Annotated[int, Path(...)]) -> 
 
 @router.get('/{pk}/reports', summary='Get scan reports', dependencies=[DependsJwtAuth])
 async def get_scan_reports(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    await _owned_scan(request, pk)
     reports = await finding_service.get_reports(scan_id=pk)
     data = select_list_serialize(reports)
     return response_base.success(request=request, data=data)
@@ -116,6 +138,7 @@ async def generate_scan_report(
     format: Annotated[str, Query()] = 'html',
     lang: Annotated[str, Query()] = 'fr',
 ) -> ResponseModel:
+    await _reportable_scan(request, pk)
     report = await report_service.generate(scan_id=pk, format=format, lang=lang)
     data = GetReportDetails(**select_as_dict(report))
     return response_base.success(request=request, data=data)
@@ -123,12 +146,14 @@ async def generate_scan_report(
 
 @router.get('/{pk}/report/download', summary='Render & stream a report through the API', dependencies=[DependsJwtAuth])
 async def download_scan_report(
+    request: Request,
     pk: Annotated[int, Path(...)],
     format: Annotated[str, Query()] = 'pdf',
     lang: Annotated[str, Query()] = 'fr',
 ) -> Response:
     # Streams the report bytes directly (no public MinIO needed). The client saves
     # and opens it locally; auth via the Bearer token like every other route.
+    await _reportable_scan(request, pk)
     content, mime, filename = await report_service.render(scan_id=pk, format=format, lang=lang)
     return Response(
         content=content,
@@ -144,8 +169,13 @@ async def scan_progress_ws(websocket: WebSocket, pk: Annotated[int, Path(...)]) 
     (published by the pipeline) until the scan completes or the client disconnects.
     """
     try:
-        jwt_decode(websocket.query_params.get('token', ''))
-    except Exception:  # noqa: BLE001 — invalid/absent token
+        sub = await jwt_authentication(websocket.query_params.get('token', ''))
+        async with async_db_session() as db:
+            user = await get_current_user(db, sub)
+        roles = [r.name for r in (user.roles or [])]
+        actor = Actor(id=user.id, is_admin=RoleEnum.ADMIN.value in roles)
+        await scan_service.get_by_id(actor=actor, pk=pk)
+    except Exception:  # noqa: BLE001 — invalid/absent token or not the caller's scan
         await websocket.close(code=1008)
         return
 
@@ -179,19 +209,16 @@ async def get_scan_progress(request: Request, pk: Annotated[int, Path(...)]) -> 
     Corrélation, Validation contrôlée, Analyse IA…), a 0-100 percent, per-scanner
     counts (which are done, which are still running), and the ordered step log.
     """
+    scan = await _owned_scan(request, pk)
     events = await progress_snapshot(pk)
-    db_status = None
-    try:
-        scan = await scan_service.get_by_id(pk=pk)
-        db_status = getattr(scan, 'status', None)
-    except Exception:  # noqa: BLE001 — progress must work even if the row is gone
-        pass
+    db_status = getattr(scan, 'status', None)
     data = progress_describe(events, db_status=db_status)
     return response_base.success(request=request, data=data)
 
 
 @router.get('/{pk}/exploits', summary='Get scan exploit proofs', dependencies=[DependsJwtAuth])
 async def get_scan_exploits(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    await _owned_scan(request, pk)
     exploits = await finding_service.get_exploits(scan_id=pk)
     data = select_list_serialize(exploits)
     return response_base.success(request=request, data=data)

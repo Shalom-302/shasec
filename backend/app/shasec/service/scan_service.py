@@ -4,6 +4,8 @@ from sqlalchemy import Select
 
 from backend.app.shasec.schema.scan import CreateScanParam
 from backend.app.shasec.schema.target import CreateTargetParam
+from backend.app.shasec.service.access import Actor, ensure_access
+from backend.app.shasec.service.credit_service import credit_service
 from backend.app.shasec.service.orchestrator import run_pipeline
 from backend.common.enums import ScanStatus
 from backend.common.exception import errors
@@ -53,36 +55,49 @@ async def _dispatch(scan_id: int, auth_token: str | None = None, options: dict |
     _run_in_process(scan_id, auth_token=auth_token, options=options)
 
 
+def _guard_options(actor: Actor, *, allow_active_exploitation: bool = False,
+                   aggression: str = 'safe', allow_destructive: bool = False) -> None:
+    """Self-service accounts get passive/bounded scanning only: active
+    exploitation, aggressive probing and write verbs stay admin-only."""
+    if actor.is_admin:
+        return
+    if allow_active_exploitation or allow_destructive or getattr(aggression, 'value', aggression) != 'safe':
+        raise errors.ForbiddenError(
+            msg='Active exploitation, aggressive and destructive options are not available on this plan.'
+        )
+
+
 class ScanService:
     @staticmethod
-    async def get_by_id(*, pk: int) -> Scan:
+    async def get_by_id(*, actor: Actor, pk: int) -> Scan:
         async with async_db_session() as db:
             scan = await scan_dao.get(db, pk)
-            if not scan:
-                raise errors.NotFoundError(msg='Scan not found')
+            ensure_access(actor, scan, not_found='Scan not found')
             return scan
 
     @staticmethod
-    async def get_select(*, target_id: int = None, status: str = None) -> Select:
-        return await scan_dao.get_list(target_id=target_id, status=status)
+    async def get_select(*, actor: Actor, target_id: int = None, status: str = None) -> Select:
+        owner_id = None if actor.is_admin else actor.id
+        return await scan_dao.get_list(target_id=target_id, status=status, owner_id=owner_id)
 
     @staticmethod
-    async def create(*, obj: CreateScanParam) -> Scan:
+    async def create(*, actor: Actor, obj: CreateScanParam) -> Scan:
+        _guard_options(actor, allow_active_exploitation=obj.allow_active_exploitation)
         async with async_db_session.begin() as db:
             target = await target_dao.get(db, obj.target_id)
-            if not target:
-                raise errors.NotFoundError(msg='Target not found')
-            return await scan_dao.create(db, obj)
+            ensure_access(actor, target, not_found='Target not found')
+            scan = await scan_dao.create(db, obj, owner_id=target.owner_id or actor.id)
+            await db.flush()
+            return scan
 
     @staticmethod
-    async def start(*, pk: int) -> Scan:
-        """Validate preconditions, enforce the authorized-scope guardrail, then
-        hand the scan to the orchestrator (inline task in Phase 1, arq in Phase 2).
+    async def start(*, actor: Actor, pk: int) -> Scan:
+        """Validate preconditions, enforce the authorized-scope guardrail, bill
+        the account, then hand the scan to the orchestrator.
         """
         async with async_db_session.begin() as db:
             scan = await scan_dao.get(db, pk)
-            if not scan:
-                raise errors.NotFoundError(msg='Scan not found')
+            ensure_access(actor, scan, not_found='Scan not found')
             if scan.status != ScanStatus.pending.value:
                 # Already started/finished: idempotent guard, surfaced as 409 so a
                 # retried start is a clear conflict, never a second run.
@@ -92,7 +107,7 @@ class ScanService:
                 raise errors.NotFoundError(msg='Target not found')
             if not target.is_authorized:
                 raise errors.ForbiddenError(
-                    msg='Target is not authorized for scanning. Authorize the target first.'
+                    msg='Target is not authorized for scanning. Verify ownership of the target first.'
                 )
             # Atomically claim the scan (pending -> running) BEFORE dispatch. The
             # read above gives clear errors on the common path; this conditional
@@ -101,6 +116,8 @@ class ScanService:
             claimed = await scan_dao.claim_for_start(db, pk)
             if claimed == 0:
                 raise errors.ConflictError(msg='Scan already started (concurrent start)')
+            # Same transaction as the claim: a 402 rolls the claim back.
+            await credit_service.charge_scan(db, actor, scan)
 
         await _dispatch(pk)
 
@@ -109,24 +126,41 @@ class ScanService:
 
     @staticmethod
     async def quick(
-        *, url: str, type: str, name: str | None = None, allow_active_exploitation: bool = False,
+        *, actor: Actor, url: str, type: str, name: str | None = None, allow_active_exploitation: bool = False,
         profile: str = 'standard', aggression: str = 'safe',
         auth_token: str | None = None, id_range: str | None = None, allow_destructive: bool = False,
     ) -> Scan:
-        """One-shot: from a URL, create-or-reuse the target, create the scan and
-        start it. The URL still lands on a Target row (so history is preserved);
-        callers just don't have to manage it.
+        """One-shot: from a URL, create-or-reuse the caller's target, create the
+        scan, bill it and start it.
 
-        The authenticated caller explicitly requested this URL, so the target is
-        auto-authorized. (Ownership proof — e.g. DNS challenge — is future work.)
+        Admins get the target auto-authorized (operator use). Everyone else must
+        have proven ownership of the target first: an unknown URL is registered
+        on their account (unverified) and the call is refused with its id so the
+        client can walk them through verification.
         """
+        _guard_options(actor, allow_active_exploitation=allow_active_exploitation,
+                       aggression=aggression, allow_destructive=allow_destructive)
         # Reuse the Target validator (rejects local/private, enforces http(s)).
         target_param = CreateTargetParam(name=name or url, url=url, type=type)
+
+        if not actor.is_admin:
+            async with async_db_session.begin() as db:
+                target = await target_dao.select_model_by_column(db, url=target_param.url, owner_id=actor.id)
+                if not target:
+                    target = await target_dao.create(db, target_param, owner_id=actor.id)
+                    await db.flush()
+                target_id, authorized = target.id, target.is_authorized
+            if not authorized:
+                raise errors.ForbiddenError(
+                    msg='Verify ownership of this target before scanning it.', data={'target_id': target_id}
+                )
+
         async with async_db_session.begin() as db:
-            target = await target_dao.select_model_by_column(db, url=target_param.url)
+            target = await target_dao.select_model_by_column(db, url=target_param.url, owner_id=actor.id)
             if not target:
-                target = await target_dao.create(db, target_param)
-            target.is_authorized = True
+                target = await target_dao.create(db, target_param, owner_id=actor.id)
+            if actor.is_admin:
+                target.is_authorized = True
             await db.flush()
             scan = await scan_dao.create(
                 db,
@@ -135,8 +169,10 @@ class ScanService:
                     allow_active_exploitation=allow_active_exploitation,
                     profile=profile,
                 ),
+                owner_id=actor.id,
             )
             await db.flush()  # populate scan.id before the transaction commits
+            await credit_service.charge_scan(db, actor, scan)
             scan_id = scan.id
 
         options = {'allow_destructive': bool(allow_destructive), 'aggression': aggression}
@@ -148,11 +184,10 @@ class ScanService:
             return await scan_dao.get(db, scan_id)
 
     @staticmethod
-    async def cancel(*, pk: int) -> int:
+    async def cancel(*, actor: Actor, pk: int) -> int:
         async with async_db_session.begin() as db:
             scan = await scan_dao.get(db, pk)
-            if not scan:
-                raise errors.NotFoundError(msg='Scan not found')
+            ensure_access(actor, scan, not_found='Scan not found')
             if scan.status not in (ScanStatus.pending.value, ScanStatus.running.value):
                 raise errors.ForbiddenError(msg=f'Scan cannot be cancelled (status={scan.status})')
             return await scan_dao.update(
@@ -160,8 +195,10 @@ class ScanService:
             )
 
     @staticmethod
-    async def delete(*, pk: list[int]) -> int:
+    async def delete(*, actor: Actor, pk: list[int]) -> int:
         async with async_db_session.begin() as db:
+            for scan_id in pk:
+                ensure_access(actor, await scan_dao.get(db, scan_id), not_found='Scan not found')
             return await scan_dao.delete(db, pk)
 
 

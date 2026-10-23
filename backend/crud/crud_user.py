@@ -3,7 +3,7 @@ from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from backend.models import User
+from backend.models import Role, User
 from backend.crud.crud_role import role_dao
 from backend.app.admin.schema.user import (
     UserRegister,
@@ -97,12 +97,14 @@ class CRUDUser(CRUDBase[User]):
         new_admin = self.model(**dict_obj)
         await db.add(db, new_admin)
 
-    async def add(self, db: AsyncSession, obj: UserRegister) -> User:
+    async def add(self, db: AsyncSession, obj: UserRegister, role_name: str = Role_enum.ADMIN.value) -> User:
         """
-        Add admin
+        Add a user with the given role (admin by default, for the CLI;
+        self-registration passes settings.REGISTER_DEFAULT_ROLE).
 
         :param db:
         :param obj:
+        :param role_name: role attached by name, created if missing (non-admin only)
         :return:
         """
         salt = text_captcha(5)
@@ -115,7 +117,11 @@ class CRUDUser(CRUDBase[User]):
         new_admin = self.model(**dict_obj)
 
         
-        role = await role_dao.get_by_name(db, Role_enum.ADMIN.value)
+        role = await role_dao.get_by_name(db, role_name)
+        if role is None and role_name != Role_enum.ADMIN.value:
+            role = Role(name=role_name)
+            db.add(role)
+            await db.flush()
         
         role_list = []
         if role is not None:

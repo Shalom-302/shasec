@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import ConfigDict
 
-from backend.common.enums import ExploitAggression, ScanProfile, ScanStatus, TargetType
+from backend.common.enums import ExploitAggression, ScanBilling, ScanProfile, ScanStatus, TargetType
 from backend.common.schema import SchemaBase
 
 
@@ -46,6 +46,9 @@ class GetScanDetails(SchemaBase):
     status: ScanStatus
     profile: ScanProfile = ScanProfile.standard
     allow_active_exploitation: bool = False
+    owner_id: int | None = None
+    billing: ScanBilling = ScanBilling.admin
+    credits_charged: int = 0
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None

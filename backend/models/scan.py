@@ -4,7 +4,7 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.common.enums import ScanProfile, ScanStatus
+from backend.common.enums import ScanBilling, ScanProfile, ScanStatus
 from backend.common.model import Base, get_id, id_key
 
 
@@ -35,6 +35,17 @@ class Scan(Base):
     # payloads, not just reads). OFF by default — scanning never implies it.
     allow_active_exploitation: Mapped[bool] = mapped_column(
         sa.Boolean, default=False, comment='Consent to run the exploit stage'
+    )
+    owner_id: Mapped[int | None] = mapped_column(
+        sa.ForeignKey('user.id', ondelete='CASCADE'), index=True, default=None, comment='Owner account'
+    )
+    # How the scan was paid for (free discovery / credits / admin). Free scans
+    # show results but do not unlock detailed reports.
+    billing: Mapped[str] = mapped_column(
+        sa.String(16), default=ScanBilling.admin.value, comment='free / credits / admin'
+    )
+    credits_charged: Mapped[int] = mapped_column(
+        sa.Integer, default=0, comment='Credits debited for this scan (refunded on failure)'
     )
     started_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), init=False, default=None

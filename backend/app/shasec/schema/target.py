@@ -90,5 +90,10 @@ class GetTargetDetails(TargetSchemaBase):
     id: int
     x_id: str
     is_authorized: bool
+    owner_id: int | None = None
+    # Ownership proof: serve verify_token at verify_url, then POST /targets/{id}/verify.
+    verify_token: str | None = None
+    verify_url: str | None = None
+    verified_at: datetime | None = None
     created_time: datetime
     updated_time: datetime | None = None

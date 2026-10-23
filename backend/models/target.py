@@ -1,10 +1,17 @@
 from typing import List
 
+import secrets
+from datetime import datetime
+
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.common.enums import TargetType
 from backend.common.model import Base, get_id, id_key
+
+
+def new_verify_token() -> str:
+    return f'kortex-verify={secrets.token_urlsafe(24)}'
 
 
 class Target(Base):
@@ -24,6 +31,21 @@ class Target(Base):
     # an audit platform that scans un-vetted targets is a weapon, not a tool.
     is_authorized: Mapped[bool] = mapped_column(
         sa.Boolean, default=False, comment='Owner authorized this target for scanning'
+    )
+
+    # Tenant: the account that registered this target. NULL = legacy/admin row,
+    # visible to admins only.
+    owner_id: Mapped[int | None] = mapped_column(
+        sa.ForeignKey('user.id', ondelete='CASCADE'), index=True, default=None, comment='Owner account'
+    )
+    # Ownership proof: the owner serves this token at settings.TARGET_VERIFY_PATH
+    # on the target host. A successful check is what flips is_authorized for a
+    # non-admin — owning the account is not owning the domain.
+    verify_token: Mapped[str] = mapped_column(
+        sa.String(64), init=False, default_factory=new_verify_token, comment='Ownership proof token'
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), init=False, default=None, comment='Last successful ownership proof'
     )
 
     scans: Mapped[List['Scan']] = relationship(
