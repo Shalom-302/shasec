@@ -45,7 +45,7 @@ class Scan(Base):
         sa.String(16), default=ScanBilling.admin.value, comment='free / credits / admin'
     )
     credits_charged: Mapped[int] = mapped_column(
-        sa.Integer, default=0, comment='Credits debited for this scan (refunded on failure)'
+        sa.Integer, default=0, comment='Credits debited for this scan'
     )
     started_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), init=False, default=None
