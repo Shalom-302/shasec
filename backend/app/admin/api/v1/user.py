@@ -7,6 +7,7 @@ from backend.utils.serializers import select_as_dict
 
 from backend.app.admin.schema.user import GetUserInfoListDetails, UserUpdate
 from backend.app.admin.service.user_service import user_service
+from backend.app.shasec.service.access import actor_from, require_admin
 from backend.common.response.response_schema import ResponseModel, response_base
 from backend.common.security.jwt import DependsJwtAuth
 
@@ -39,6 +40,7 @@ async def get_pagination_users(
     role: Annotated[Union[Role, str] | None, Query()] = None,
     status: Annotated[bool | None, Query()] = None,
 ) -> ResponseModel:
+    require_admin(actor_from(request))  # was unprotected: any authenticated user could list all accounts
     user_select = await user_service.get_select(
         q=query, role=role, status=status
     )
