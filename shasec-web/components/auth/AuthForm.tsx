@@ -11,6 +11,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [terms, setTerms] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const isRegister = mode === 'register';
@@ -20,6 +21,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     setErr('');
     if (isRegister && password.length < 8) return setErr('Le mot de passe doit contenir au moins 8 caractères.');
     if (isRegister && password !== confirm) return setErr('Les mots de passe ne correspondent pas.');
+    if (isRegister && !terms) return setErr('Acceptez les conditions d’utilisation pour créer votre compte.');
     setBusy(true);
     try {
       await authCall(mode, { email, password });
@@ -58,6 +60,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
           <label className="label" htmlFor="confirm">Confirmer le mot de passe</label>
           <input id="confirm" className="input" type="password" required autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} />
         </div>
+      )}
+      {isRegister && (
+        <label className="flex cursor-pointer items-start gap-2.5 text-sm text-kx-muted">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-black" checked={terms} onChange={e => setTerms(e.target.checked)} />
+          <span>J’accepte les <Link href="/terms" target="_blank" className="font-semibold text-black underline underline-offset-4">conditions d’utilisation</Link>.</span>
+        </label>
       )}
       {err && <p className="alert-err" role="alert">{err}</p>}
       <button className="btn w-full py-3 text-base" disabled={busy || !email || !password}>

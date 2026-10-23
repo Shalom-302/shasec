@@ -82,6 +82,10 @@ class UpdateTargetParam(_ValidatedTargetParam):
 
 class AuthorizeTargetParam(SchemaBase):
     is_authorized: bool
+    # Required (true + current version) for a non-admin to authorize: the client
+    # attests ownership / written permission under the terms of use.
+    accept_terms: bool = False
+    terms_version: str | None = None
 
 
 class GetTargetDetails(TargetSchemaBase):
@@ -91,9 +95,7 @@ class GetTargetDetails(TargetSchemaBase):
     x_id: str
     is_authorized: bool
     owner_id: int | None = None
-    # Ownership proof: serve verify_token at verify_url, then POST /targets/{id}/verify.
-    verify_token: str | None = None
-    verify_url: str | None = None
-    verified_at: datetime | None = None
+    authorized_at: datetime | None = None
+    terms_version: str | None = None
     created_time: datetime
     updated_time: datetime | None = None

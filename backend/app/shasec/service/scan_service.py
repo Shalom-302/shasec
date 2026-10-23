@@ -107,7 +107,7 @@ class ScanService:
                 raise errors.NotFoundError(msg='Target not found')
             if not target.is_authorized:
                 raise errors.ForbiddenError(
-                    msg='Target is not authorized for scanning. Verify ownership of the target first.'
+                    msg="Cette cible n'est pas autorisée au scan. Acceptez d'abord les conditions d'utilisation pour cette cible."
                 )
             # Atomically claim the scan (pending -> running) BEFORE dispatch. The
             # read above gives clear errors on the common path; this conditional
@@ -134,9 +134,9 @@ class ScanService:
         scan, bill it and start it.
 
         Admins get the target auto-authorized (operator use). Everyone else must
-        have proven ownership of the target first: an unknown URL is registered
-        on their account (unverified) and the call is refused with its id so the
-        client can walk them through verification.
+        have authorized the target first (scope attestation under the terms of
+        use): an unknown URL is registered on their account (unauthorized) and the
+        call is refused with its id so the client can collect the attestation.
         """
         _guard_options(actor, allow_active_exploitation=allow_active_exploitation,
                        aggression=aggression, allow_destructive=allow_destructive)
@@ -152,7 +152,7 @@ class ScanService:
                 target_id, authorized = target.id, target.is_authorized
             if not authorized:
                 raise errors.ForbiddenError(
-                    msg='Verify ownership of this target before scanning it.', data={'target_id': target_id}
+                    msg="Autorisez d'abord cette cible (acceptation des conditions d'utilisation).", data={'target_id': target_id}
                 )
 
         async with async_db_session.begin() as db:

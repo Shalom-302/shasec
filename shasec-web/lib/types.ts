@@ -35,9 +35,8 @@ export type Target = {
   type: TargetType;
   is_authorized: boolean;
   owner_id?: number | null;
-  verify_token?: string | null;
-  verify_url?: string | null;
-  verified_at?: string | null;
+  authorized_at?: string | null;
+  terms_version?: string | null;
   created_time: string;
   updated_time?: string | null;
 };

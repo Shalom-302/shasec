@@ -85,8 +85,8 @@ export function StatusBadge({ status }: { status: ScanStatus | string }) {
 
 export function VerifiedBadge({ ok }: { ok: boolean }) {
   return ok
-    ? <span className="whitespace-nowrap rounded-full bg-kx-tealSoft px-2.5 py-1 text-xs font-semibold text-teal-900">Propriété vérifiée</span>
-    : <span className="whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">À vérifier</span>;
+    ? <span className="whitespace-nowrap rounded-full bg-kx-tealSoft px-2.5 py-1 text-xs font-semibold text-teal-900">Scan autorisé</span>
+    : <span className="whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">Non autorisée</span>;
 }
 
 export function Pager({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {

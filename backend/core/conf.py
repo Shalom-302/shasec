@@ -88,8 +88,9 @@ class Settings(BaseSettings):
     CREDITS_COST_FAST: int = 1
     CREDITS_COST_STANDARD: int = 2
     CREDITS_COST_DEEP: int = 4
-    # Ownership proof: the owner serves the target's verify token at this path.
-    TARGET_VERIFY_PATH: str = '/.well-known/kortex-security-verify.txt'
+    # Version of the terms of use a client must accept to authorize a target
+    # (bump it with the terms page in shasec-web/lib/terms.ts).
+    TERMS_VERSION: str = '2026-10-23'
 
     # SMTP / email (optional: leave blank to disable outgoing mail)
     SMTP_TLS: str = 'True'

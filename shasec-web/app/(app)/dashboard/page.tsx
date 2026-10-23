@@ -64,7 +64,7 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat label="Scans réalisés" value={data.scans.total} />
-            <Stat label="Applications" value={data.targets.total} hint={`${verified} vérifiée${verified > 1 ? 's' : ''}`} />
+            <Stat label="Applications" value={data.targets.total} hint={`${verified} autorisée${verified > 1 ? 's' : ''}`} />
             {isAdmin ? (
               <Stat label="Compte" value="Opérateur" />
             ) : (
@@ -157,7 +157,7 @@ function Onboarding({ hasTarget, hasVerified, hasScan, firstTargetId }: {
   if (hasTarget && hasVerified && hasScan) return null;
   const steps = [
     { done: hasTarget, title: 'Ajoutez votre application', text: 'L’URL de votre site ou de votre API.', href: '/targets', cta: 'Ajouter' },
-    { done: hasVerified, title: 'Prouvez-en la propriété', text: 'Publiez un petit fichier de vérification.', href: firstTargetId ? `/targets/${firstTargetId}` : '/targets', cta: 'Vérifier' },
+    { done: hasVerified, title: 'Autorisez le scan', text: 'Attestez votre autorisation et acceptez les conditions.', href: firstTargetId ? `/targets/${firstTargetId}` : '/targets', cta: 'Autoriser' },
     { done: hasScan, title: 'Lancez votre premier scan', text: 'Résultats en quelques minutes.', href: '/scans/new', cta: 'Scanner' },
   ];
   const current = steps.findIndex(s => !s.done);

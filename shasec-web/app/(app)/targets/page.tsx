@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ScopeAttestation } from '@/components/ScopeAttestation';
 import { Empty, ErrorBox, Loading, Pager, PageHeader, TextLink, VerifiedBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtDate, TYPE_LABEL } from '@/lib/format';
+import { TERMS_VERSION } from '@/lib/terms';
 import type { Page, Target, TargetType } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 
@@ -22,6 +24,7 @@ export default function TargetsPage() {
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [attest, setAttest] = useState(false);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +32,10 @@ export default function TargetsPage() {
     setBusy(true);
     try {
       const t = await api<Target>('/targets', { method: 'POST', body: { name: name.trim() || url.trim(), url: url.trim(), type } });
-      router.push(`/targets/${t.id}`);
+      await api(`/targets/${t.id}/authorize`, {
+        method: 'POST', body: { is_authorized: true, accept_terms: true, terms_version: TERMS_VERSION },
+      });
+      router.push(`/scans/new?target=${t.id}`);
     } catch (e: any) {
       setFormErr(e.message);
       setBusy(false);
@@ -55,13 +61,10 @@ export default function TargetsPage() {
           </select>
         </div>
       </div>
-      <p className="alert-info">
-        Vous ne pouvez scanner que des applications dont vous êtes propriétaire ou pour lesquelles vous disposez
-        d’une autorisation écrite. Après l’ajout, nous vous demanderons d’en prouver la propriété.
-      </p>
+      <ScopeAttestation checked={attest} onChange={setAttest} id="attest-new" />
       {formErr && <p className="alert-err" role="alert">{formErr}</p>}
       <div className="flex gap-2">
-        <button className="btn" disabled={busy || !url.trim()}>{busy ? 'Ajout…' : 'Ajouter'}</button>
+        <button className="btn" disabled={busy || !url.trim() || !attest}>{busy ? 'Ajout…' : 'Ajouter et continuer'}</button>
         <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>Annuler</button>
       </div>
     </form>
@@ -97,7 +100,7 @@ export default function TargetsPage() {
                   <td className="whitespace-nowrap text-right">
                     {t.is_authorized
                       ? <TextLink href={`/scans/new?target=${t.id}`}>Scanner</TextLink>
-                      : <TextLink href={`/targets/${t.id}`}>Vérifier</TextLink>}
+                      : <TextLink href={`/targets/${t.id}`}>Autoriser</TextLink>}
                   </td>
                 </tr>
               ))}

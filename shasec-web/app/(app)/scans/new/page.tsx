@@ -70,8 +70,8 @@ function NewScan() {
     return (
       <>
         <PageHeader title="Lancer un scan" />
-        <Empty title="Aucune application vérifiée" action={<Link href="/targets" className="btn">Mes applications</Link>}>
-          Ajoutez une application et prouvez-en la propriété pour pouvoir la scanner.
+        <Empty title="Aucune application autorisée" action={<Link href="/targets" className="btn">Mes applications</Link>}>
+          Ajoutez une application et attestez votre autorisation pour pouvoir la scanner.
         </Empty>
       </>
     );
@@ -80,7 +80,7 @@ function NewScan() {
   return (
     <>
       <p className="mb-2 text-sm"><TextLink href="/scans">← Scans</TextLink></p>
-      <PageHeader title="Lancer un scan" sub="Audit non intrusif de votre application vérifiée." />
+      <PageHeader title="Lancer un scan" sub="Audit non intrusif d’une application autorisée." />
 
       {step === 'form' ? (
         <div className="card max-w-2xl space-y-5">
@@ -90,7 +90,7 @@ function NewScan() {
               <option value="">Choisir…</option>
               {authorized.map(t => <option key={t.id} value={t.id}>{t.name} — {t.url}</option>)}
             </select>
-            <p className="mt-1 text-xs text-kx-muted">Seules les applications dont la propriété est vérifiée apparaissent ici.</p>
+            <p className="hint">Seules les applications autorisées au scan apparaissent ici.</p>
           </div>
 
           <fieldset>

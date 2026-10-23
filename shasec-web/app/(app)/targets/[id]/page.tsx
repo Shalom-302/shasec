@@ -3,32 +3,13 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ScopeAttestation } from '@/components/ScopeAttestation';
 import { ErrorBox, Loading, PageHeader, StatusBadge, TextLink, VerifiedBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtDate, PROFILE_LABEL, TYPE_LABEL } from '@/lib/format';
+import { TERMS_VERSION } from '@/lib/terms';
 import type { Page, Scan, Target } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
-
-function CopyField({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div>
-      <span className="label">{label}</span>
-      <div className="flex gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-lg border border-kx-border bg-kx-panel2 px-3 py-2 font-mono text-xs">{value}</code>
-        <button
-          type="button"
-          className="btn-ghost btn-sm shrink-0"
-          onClick={async () => {
-            try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
-          }}
-        >
-          {copied ? 'Copié' : 'Copier'}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function TargetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,24 +18,27 @@ export default function TargetDetailPage() {
   const scans = useAsync(() => api<Page<Scan>>('/scans', { query: { target_id: id, page: 1, size: 10 } }), [id]);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [attest, setAttest] = useState(false);
 
-  const verify = async () => {
-    setBusy('verify'); setMsg(null);
+  const authorize = async () => {
+    setBusy('authorize'); setMsg(null);
     try {
-      const t = await api<Target>(`/targets/${id}/verify`, { method: 'POST' });
+      const t = await api<Target>(`/targets/${id}/authorize`, {
+        method: 'POST', body: { is_authorized: true, accept_terms: true, terms_version: TERMS_VERSION },
+      });
       target.setData(t);
-      setMsg({ ok: true, text: 'Propriété vérifiée. Vous pouvez maintenant scanner cette application.' });
+      setAttest(false);
+      setMsg({ ok: true, text: 'Scan autorisé. Vous pouvez maintenant lancer un scan sur cette application.' });
     } catch (e: any) {
       setMsg({ ok: false, text: e.message });
     } finally { setBusy(''); }
   };
 
   const revoke = async () => {
-    if (!confirm('Retirer l’autorisation de scan ? Il faudra re-vérifier la propriété pour scanner à nouveau.')) return;
+    if (!confirm('Retirer l’autorisation de scan ? Il faudra attester à nouveau pour scanner cette application.')) return;
     setBusy('revoke'); setMsg(null);
     try {
-      await api(`/targets/${id}/authorize`, { method: 'POST', body: { is_authorized: false } });
-      await target.reload();
+      target.setData(await api<Target>(`/targets/${id}/authorize`, { method: 'POST', body: { is_authorized: false } }));
     } catch (e: any) { setMsg({ ok: false, text: e.message }); } finally { setBusy(''); }
   };
 
@@ -85,7 +69,7 @@ export default function TargetDetailPage() {
           <h2 className="card-title">Informations</h2>
           <Row k="Type" v={TYPE_LABEL[t.type] || t.type} />
           <Row k="Statut" v={<VerifiedBadge ok={t.is_authorized} />} />
-          {t.verified_at && <Row k="Vérifiée le" v={fmtDate(t.verified_at)} />}
+          {t.authorized_at && <Row k="Autorisée le" v={fmtDate(t.authorized_at)} />}
           <Row k="Ajoutée le" v={fmtDate(t.created_time)} />
           <div className="flex flex-wrap gap-2 pt-2">
             {t.is_authorized && <button className="btn-ghost btn-sm" disabled={!!busy} onClick={revoke}>Retirer l’autorisation</button>}
@@ -94,27 +78,21 @@ export default function TargetDetailPage() {
         </section>
 
         <section className="card space-y-4 lg:col-span-2">
-          <h2 className="card-title">Preuve de propriété</h2>
+          <h2 className="card-title">Autorisation de scan</h2>
           {t.is_authorized ? (
-            <p className="alert-ok">Cette application est vérifiée : vous pouvez la scanner.</p>
+            <p className="alert-ok">
+              Scan autorisé{t.authorized_at ? ` le ${fmtDate(t.authorized_at)}` : ''}
+              {t.terms_version ? ` · conditions d’utilisation du ${t.terms_version}` : ''}.
+            </p>
           ) : (
             <>
-              <p className="text-sm text-kx-muted">
-                Pour protéger les sites des tiers, un scan n’est possible qu’après avoir prouvé que vous contrôlez
-                l’application. Publiez le fichier ci-dessous sur le serveur, puis cliquez sur « Vérifier ».
+              <p className="text-kx-muted">
+                Avant le premier scan, confirmez que vous êtes autorisé à tester cette application.
               </p>
-              <ol className="list-decimal space-y-3 pl-5 text-sm">
-                <li>
-                  Créez un fichier texte accessible publiquement à cette adresse :
-                  {t.verify_url && <div className="mt-2"><CopyField label="Adresse du fichier" value={t.verify_url} /></div>}
-                </li>
-                <li>
-                  Placez-y exactement ce contenu :
-                  {t.verify_token && <div className="mt-2"><CopyField label="Contenu du fichier" value={t.verify_token} /></div>}
-                </li>
-                <li>Le fichier doit répondre en HTTP 200, sans redirection.</li>
-              </ol>
-              <button className="btn" onClick={verify} disabled={!!busy}>{busy === 'verify' ? 'Vérification…' : 'Vérifier maintenant'}</button>
+              <ScopeAttestation checked={attest} onChange={setAttest} />
+              <button className="btn" onClick={authorize} disabled={!attest || !!busy}>
+                {busy === 'authorize' ? 'Enregistrement…' : 'Autoriser le scan'}
+              </button>
             </>
           )}
           {msg && <p className={msg.ok ? 'alert-ok' : 'alert-err'} role="status">{msg.text}</p>}

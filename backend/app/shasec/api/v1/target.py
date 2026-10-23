@@ -9,7 +9,7 @@ from backend.app.shasec.schema.target import (
     UpdateTargetParam,
 )
 from backend.app.shasec.service.access import actor_from
-from backend.app.shasec.service.target_service import target_service, verify_url
+from backend.app.shasec.service.target_service import target_service
 from backend.common.pagination import DependsPagination, paging_data
 from backend.common.response.response_schema import ResponseModel, response_base
 from backend.common.security.jwt import DependsJwtAuth
@@ -20,7 +20,7 @@ router = APIRouter(prefix='/targets', tags=['Target'])
 
 
 def _details(target) -> GetTargetDetails:
-    return GetTargetDetails(**select_as_dict(target), verify_url=verify_url(target))
+    return GetTargetDetails(**select_as_dict(target))
 
 
 @router.get('/{pk}', summary='Get target by ID', dependencies=[DependsJwtAuth])
@@ -59,20 +59,16 @@ async def update_target(
     return response_base.fail(request=request)
 
 
-@router.post('/{pk}/authorize', summary='Authorize (or revoke) a target for scanning', dependencies=[DependsJwtAuth])
+@router.post('/{pk}/authorize', summary='Authorize (attest scope, accepting the terms) or revoke a target',
+             dependencies=[DependsJwtAuth])
 async def authorize_target(
     request: Request, pk: Annotated[int, Path(...)], obj: AuthorizeTargetParam
 ) -> ResponseModel:
-    count = await target_service.set_authorization(actor=actor_from(request), pk=pk, is_authorized=obj.is_authorized)
-    if count > 0:
-        return response_base.success(request=request)
-    return response_base.fail(request=request)
-
-
-@router.post('/{pk}/verify', summary='Prove ownership (serve verify_token at verify_url) and authorize',
-             dependencies=[DependsJwtAuth])
-async def verify_target(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
-    target = await target_service.verify(actor=actor_from(request), pk=pk)
+    target = await target_service.set_authorization(
+        actor=actor_from(request), pk=pk, is_authorized=obj.is_authorized,
+        accept_terms=obj.accept_terms, terms_version=obj.terms_version,
+        ip=getattr(request.state, 'ip', None),
+    )
     return response_base.success(request=request, data=_details(target))
 
 

@@ -1,17 +1,11 @@
-from typing import List
-
-import secrets
 from datetime import datetime
+from typing import List
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.common.enums import TargetType
 from backend.common.model import Base, get_id, id_key
-
-
-def new_verify_token() -> str:
-    return f'kortex-verify={secrets.token_urlsafe(24)}'
 
 
 class Target(Base):
@@ -38,14 +32,20 @@ class Target(Base):
     owner_id: Mapped[int | None] = mapped_column(
         sa.ForeignKey('user.id', ondelete='CASCADE'), index=True, default=None, comment='Owner account'
     )
-    # Ownership proof: the owner serves this token at settings.TARGET_VERIFY_PATH
-    # on the target host. A successful check is what flips is_authorized for a
-    # non-admin — owning the account is not owning the domain.
-    verify_token: Mapped[str] = mapped_column(
-        sa.String(64), init=False, default_factory=new_verify_token, comment='Ownership proof token'
+    # Scope attestation: who declared (under the accepted terms of use) that they
+    # own the target or hold written permission to test it, when, from where.
+    # This is the accountability trail behind is_authorized for self-service accounts.
+    authorized_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), init=False, default=None, comment='When scanning was attested'
     )
-    verified_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), init=False, default=None, comment='Last successful ownership proof'
+    authorized_by: Mapped[int | None] = mapped_column(
+        sa.ForeignKey('user.id', ondelete='SET NULL'), init=False, default=None, comment='Account that attested'
+    )
+    authorized_ip: Mapped[str | None] = mapped_column(
+        sa.String(64), init=False, default=None, comment='Client IP at attestation'
+    )
+    terms_version: Mapped[str | None] = mapped_column(
+        sa.String(32), init=False, default=None, comment='Terms of use version accepted'
     )
 
     scans: Mapped[List['Scan']] = relationship(
