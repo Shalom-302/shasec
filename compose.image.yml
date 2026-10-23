@@ -62,6 +62,24 @@ services:
         condition: service_started
     networks: [shasec]
 
+  # Kortex Security web console (Next.js, shasec-web/). Talks to the API over the
+  # internal `shasec` network only — the browser never reaches the API directly.
+  # In Dokploy, point the public domain at service `web`, port 3000.
+  web:
+    image: ghcr.io/shalom-302/shasec-web:latest
+    restart: unless-stopped
+    environment:
+      - SHAAPI_URL=http://api:8000
+      # Must match the API's settings.COOKIE_REFRESH_TOKEN_KEY.
+      - SHAAPI_REFRESH_COOKIE=${SHAAPI_REFRESH_COOKIE:-monshaapi_refresh_token}
+      # "true" once the domain is served over HTTPS (Secure session cookies).
+      - COOKIE_SECURE=${WEB_COOKIE_SECURE:-false}
+    expose:
+      - "3000"
+    depends_on:
+      - api
+    networks: [shasec]
+
   # arq worker — runs the scan pipeline jobs enqueued by the API (durability:
   # a scan survives an API restart). Same image, different entrypoint.
   worker:

@@ -4,6 +4,8 @@
 // server-side, attaching the Bearer token. See lib/server/backend.ts.
 const nextConfig = {
   poweredByHeader: false,
+  // Self-contained server bundle for the Docker image (see Dockerfile).
+  output: 'standalone',
 };
 
 module.exports = nextConfig;
