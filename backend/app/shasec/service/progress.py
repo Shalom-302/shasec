@@ -30,6 +30,7 @@ PHASES = [
     'Terminé',
 ]
 _EVENT_PHASE = {
+    'queued': ("File d'attente", 0),
     'started': ('Initialisation', 5),
     'scanners.start': ('Reconnaissance & scan', 10),
     'plugin.start': ('Reconnaissance & scan', None),   # percent from counts
@@ -110,7 +111,9 @@ def describe(events: list[dict], db_status: str | None = None) -> dict:
         phase = _EVENT_PHASE.get(name, (None, None))[0]
         if ev.get('message') is not None:
             last_msg = ev.get('message')
-        if name == 'started':
+        if name == 'queued':
+            status = 'queued'
+        elif name == 'started':
             status = 'running'
         elif name == 'scanners.start':
             total = int(ev.get('total') or total)
@@ -151,6 +154,11 @@ def describe(events: list[dict], db_status: str | None = None) -> dict:
         percent = 100
     elif status == 'failed':
         current_phase = 'Échec'
+    # The DB is authoritative for terminal states (e.g. cancelled while queued).
+    if db_status in ('completed', 'failed') and status not in ('completed', 'failed'):
+        status = db_status
+        current_phase = 'Terminé' if db_status == 'completed' else 'Échec'
+        percent = 100 if db_status == 'completed' else percent
 
     # Reconcile with the DB when the step log is empty/expired.
     if not events and db_status:

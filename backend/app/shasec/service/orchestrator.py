@@ -118,16 +118,26 @@ async def _run_exploit_stage(
     log.info(f'shasec scan {scan_id} exploit stage: {confirmed}/{len(tagged)} confirmed proof(s)')
 
 
+class ScanFailure(Exception):
+    """A failure whose message is safe to show to the customer."""
+
+
+_GENERIC_FAILURE = 'Erreur technique pendant le scan.'
+
+
 async def _mark_failed(scan_id: int, exc: Exception) -> None:
-    log.error(f'shasec scan {scan_id} failed: {exc}')
-    await publish_progress(scan_id, 'failed', status='failed', message=str(exc)[:200])
+    # Full detail goes to the logs only; customers see a clean message (no SQL,
+    # paths or stack details from internal exceptions).
+    log.error(f'shasec scan {scan_id} failed: {exc!r}')
+    public = str(exc)[:200] if isinstance(exc, ScanFailure) else _GENERIC_FAILURE
+    await publish_progress(scan_id, 'failed', status='failed', message=public)
     async with async_db_session.begin() as db:
         await scan_dao.update(
             db,
             scan_id,
             {
                 'status': ScanStatus.failed.value,
-                'error': str(exc)[:500],
+                'error': public,
                 'completed_at': timezone.now(),
             },
         )
@@ -150,8 +160,12 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dic
             target = await target_dao.get(db, scan.target_id) if scan else None
         if not scan:
             return
+        # Cancelled while waiting in the queue (or a duplicate delivery): skip.
+        if scan.status not in (ScanStatus.pending.value, ScanStatus.queued.value):
+            log.info(f'shasec scan {scan_id} skipped (status={scan.status})')
+            return
         if not target:
-            raise RuntimeError('Target not found')
+            raise ScanFailure('Application introuvable')
 
         async with async_db_session.begin() as db:
             await scan_dao.update(

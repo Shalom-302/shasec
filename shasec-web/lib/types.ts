@@ -41,7 +41,7 @@ export type Target = {
   updated_time?: string | null;
 };
 
-export type ScanStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ScanStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed';
 export type ScanProfile = 'fast' | 'standard' | 'deep';
 export type ScanBilling = 'free' | 'credits' | 'admin';
 
@@ -110,6 +110,8 @@ export type Progress = {
   message?: string | null;
   scanners: { total: number; done: number; running: string[] };
   steps: ProgressStep[];
+  db_status?: ScanStatus;
+  queue_position?: number;
 };
 
 export type CreditBalance = {

@@ -14,7 +14,8 @@ from backend.app.shasec.service.progress import snapshot as progress_snapshot
 from backend.app.shasec.service.report_service import report_service
 from backend.app.shasec.service.access import Actor, actor_from
 from backend.app.shasec.service.scan_service import scan_service
-from backend.common.enums import ScanBilling
+from backend.common.enums import ScanBilling, ScanStatus
+from backend.crud.crud_scan import scan_dao
 from backend.common.exception import errors
 from backend.common.enums import Role as RoleEnum
 from backend.common.security.jwt import get_current_user, jwt_authentication
@@ -213,6 +214,10 @@ async def get_scan_progress(request: Request, pk: Annotated[int, Path(...)]) -> 
     events = await progress_snapshot(pk)
     db_status = getattr(scan, 'status', None)
     data = progress_describe(events, db_status=db_status)
+    data['db_status'] = db_status
+    if db_status == ScanStatus.queued.value:
+        async with async_db_session() as db:
+            data['queue_position'] = await scan_dao.queue_position(db, pk)
     return response_base.success(request=request, data=data)
 
 

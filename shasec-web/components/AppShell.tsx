@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { authCall } from '@/lib/api';
 import { IconCoins, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
+import { ActiveScans } from './ActiveScans';
 import { useSession } from './SessionProvider';
 
 const NAV = [
@@ -109,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <IconMenu />
           </button>
           <span className="lg:hidden"><Logo /></span>
-          <div className="ml-auto"><CreditPill /></div>
+          <div className="ml-auto flex items-center gap-2"><ActiveScans /><CreditPill /></div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">{children}</main>
       </div>

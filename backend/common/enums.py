@@ -157,9 +157,13 @@ class TargetType(StrEnum):
 
 
 class ScanStatus(StrEnum):
-    """Lifecycle of a scan. The Scan.status column is the single source of truth."""
+    """Lifecycle of a scan. The Scan.status column is the single source of truth.
+
+    pending -> queued (billed, waiting for a worker slot) -> running -> completed | failed
+    """
 
     pending = "pending"
+    queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"

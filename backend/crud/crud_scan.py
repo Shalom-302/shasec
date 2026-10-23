@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -38,7 +38,8 @@ class CRUDScan(CRUDBase[Scan]):
         return await self.update_model(db, pk, obj_in)
 
     async def claim_for_start(self, db: AsyncSession, pk: int) -> int:
-        """Atomically transition a scan from ``pending`` to ``running``.
+        """Atomically transition a scan from ``pending`` to ``queued`` (the worker
+        flips it to ``running`` when a slot frees up).
 
         The conditional ``WHERE status = 'pending'`` makes the claim a single
         atomic statement: under concurrent ``POST /{id}/start`` calls Postgres
@@ -50,10 +51,33 @@ class CRUDScan(CRUDBase[Scan]):
         stmt = (
             update(self.model)
             .where(self.model.id == pk, self.model.status == ScanStatus.pending.value)
-            .values(status=ScanStatus.running.value)
+            .values(status=ScanStatus.queued.value)
         )
         result = await db.execute(stmt)
         return result.rowcount
+
+    async def lock_owner(self, db: AsyncSession, owner_id: int) -> None:
+        """Serialize scan launches of one account for the rest of the transaction,
+        so the per-account active-scan limit can't be raced by parallel requests."""
+        await db.execute(text('SELECT pg_advisory_xact_lock(:k1, :k2)'), {'k1': 7301, 'k2': owner_id})
+
+    async def count_active(self, db: AsyncSession, owner_id: int) -> int:
+        stmt = select(func.count()).select_from(self.model).where(
+            self.model.owner_id == owner_id,
+            self.model.status.in_([ScanStatus.queued.value, ScanStatus.running.value]),
+        )
+        return int((await db.execute(stmt)).scalar() or 0)
+
+    async def queue_position(self, db: AsyncSession, pk: int) -> int:
+        """1-based position among queued scans (FIFO by id)."""
+        stmt = select(func.count()).select_from(self.model).where(
+            self.model.status == ScanStatus.queued.value, self.model.id <= pk,
+        )
+        return int((await db.execute(stmt)).scalar() or 0)
+
+    async def running_ids(self, db: AsyncSession) -> list[int]:
+        stmt = select(self.model.id).where(self.model.status == ScanStatus.running.value)
+        return list((await db.execute(stmt)).scalars())
 
     async def delete(self, db: AsyncSession, pk: list[int]) -> int:
         return await self.delete_model_by_column(db, allow_multiple=True, id__in=pk)

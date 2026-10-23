@@ -42,10 +42,11 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
-      # Durable scans: enqueue to the arq worker. Default OFF so the API always
-      # works in-process (scans never hang); set true ONLY once the worker is
-      # confirmed running (fresh image that contains arq).
-      - SHASEC_USE_ARQ=${SHASEC_USE_ARQ:-false}
+      # Scans go through the arq queue (worker service below): at most
+      # SHASEC_MAX_CONCURRENT_SCANS run at once, the rest wait as "queued".
+      - SHASEC_USE_ARQ=${SHASEC_USE_ARQ:-true}
+      - SHASEC_MAX_CONCURRENT_SCANS=${SHASEC_MAX_CONCURRENT_SCANS:-2}
+      - SHASEC_MAX_ACTIVE_SCANS_PER_USER=${SHASEC_MAX_ACTIVE_SCANS_PER_USER:-1}
       # OWASP ZAP (the `zap` service below); active scan is opt-in (heavy/intrusive).
       - ZAP_ENDPOINT=http://zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
@@ -105,6 +106,8 @@ services:
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
       - SHASEC_USE_ARQ=true
+      # Worker concurrency (arq max_jobs) — size it to the VPS.
+      - SHASEC_MAX_CONCURRENT_SCANS=${SHASEC_MAX_CONCURRENT_SCANS:-2}
       - ZAP_ENDPOINT=http://zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
       - ZAP_ACTIVE_SCAN=${ZAP_ACTIVE_SCAN:-false}

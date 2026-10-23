@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     # worker container and the API must share this flag. Falls back to in-process if
     # the queue can't be reached. Requires a running `arq ...worker.WorkerSettings`.
     SHASEC_USE_ARQ: bool = False
+    # Scans running at the same time on this host (worker max_jobs, or the
+    # in-process semaphore). Scanners are CPU/network heavy: keep this small.
+    SHASEC_MAX_CONCURRENT_SCANS: int = 2
+    # Queued + running scans a self-service account may have at once (admins: unlimited).
+    SHASEC_MAX_ACTIVE_SCANS_PER_USER: int = 1
 
     # Kortex Security SaaS — accounts, credits and target ownership.
     # Role given to self-registered accounts. Admins (role "admin") see every

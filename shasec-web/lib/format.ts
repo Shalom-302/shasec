@@ -15,6 +15,7 @@ export function hostOf(url: string) {
 
 export const STATUS_LABEL: Record<ScanStatus, string> = {
   pending: 'En attente',
+  queued: 'En file d’attente',
   running: 'En cours',
   completed: 'Terminé',
   failed: 'Échec',
@@ -40,3 +41,30 @@ export const TYPE_LABEL: Record<TargetType, string> = {
 };
 
 export const isTerminal = (s?: string) => s === 'completed' || s === 'failed';
+export const isActive = (s?: string) => s === 'queued' || s === 'running';
+
+export function fmtDuration(fromIso?: string | null, to: number = Date.now()) {
+  if (!fromIso) return '';
+  const sec = Math.max(0, Math.round((to - new Date(fromIso).getTime()) / 1000));
+  const m = Math.floor(sec / 60);
+  return m ? `${m} min ${String(sec % 60).padStart(2, '0')} s` : `${sec} s`;
+}
+
+/** Human label for a raw pipeline progress event. */
+export function stepLabel(event: string, plugin?: string | null) {
+  const map: Record<string, string> = {
+    queued: 'Mis en file d’attente',
+    started: 'Scan démarré',
+    'scanners.start': 'Lancement des analyseurs',
+    'scanners.done': 'Analyseurs terminés',
+    'exploit.start': 'Validation contrôlée',
+    'exploit.done': 'Validation terminée',
+    'ai.start': 'Analyse IA',
+    'ai.done': 'Analyse IA terminée',
+    completed: 'Scan terminé',
+    failed: 'Échec',
+  };
+  if (event === 'plugin.start') return `${plugin || 'Analyseur'} · démarré`;
+  if (event === 'plugin.done') return `${plugin || 'Analyseur'} · terminé`;
+  return map[event] || event;
+}

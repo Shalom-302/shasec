@@ -68,6 +68,7 @@ export function SeverityBadge({ severity }: { severity?: string | null }) {
 
 const STATUS_CLS: Record<ScanStatus, string> = {
   pending: 'bg-kx-panel2 text-kx-muted',
+  queued: 'bg-amber-50 text-amber-800',
   running: 'bg-black text-white',
   completed: 'bg-kx-tealSoft text-teal-900',
   failed: 'bg-red-50 text-red-700',
@@ -78,6 +79,7 @@ export function StatusBadge({ status }: { status: ScanStatus | string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLS[s] || 'bg-kx-panel2'}`}>
       {s === 'running' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />}
+      {s === 'queued' && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />}
       {STATUS_LABEL[s] || status}
     </span>
   );

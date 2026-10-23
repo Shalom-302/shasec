@@ -7,6 +7,7 @@ from backend.app.shasec.schema.target import CreateTargetParam
 from backend.app.shasec.service.access import Actor, ensure_access
 from backend.app.shasec.service.credit_service import credit_service
 from backend.app.shasec.service.orchestrator import run_pipeline
+from backend.app.shasec.service.progress import publish as publish_progress
 from backend.common.enums import ScanStatus
 from backend.common.exception import errors
 from backend.common.log import log
@@ -20,6 +21,16 @@ from backend.models import Scan
 # does not garbage-collect them mid-run.
 _RUNNING: set = set()
 _arq_pool = None
+# In-process fallback honours the same concurrency cap as the arq worker.
+_SLOTS: asyncio.Semaphore | None = None
+
+
+async def _run_limited(scan_id: int, auth_token: str | None, options: dict | None) -> None:
+    global _SLOTS
+    if _SLOTS is None:
+        _SLOTS = asyncio.Semaphore(max(1, settings.SHASEC_MAX_CONCURRENT_SCANS))
+    async with _SLOTS:
+        await run_pipeline(scan_id, auth_token=auth_token, options=options)
 
 
 async def _get_arq_pool():
@@ -35,7 +46,7 @@ async def _get_arq_pool():
 
 
 def _run_in_process(scan_id: int, auth_token: str | None = None, options: dict | None = None) -> None:
-    task = asyncio.create_task(run_pipeline(scan_id, auth_token=auth_token, options=options))
+    task = asyncio.create_task(_run_limited(scan_id, auth_token, options))
     _RUNNING.add(task)
     task.add_done_callback(_RUNNING.discard)
 
@@ -45,6 +56,7 @@ async def _dispatch(scan_id: int, auth_token: str | None = None, options: dict |
     queue is unreachable) run in-process. auth_token and options are passed
     transiently and never persisted, so authenticated exploit modules (JWT, BFLA)
     and per-scan knobs (id_range, allow_destructive) can use them."""
+    await publish_progress(scan_id, 'queued', message='En file d’attente')
     if settings.SHASEC_USE_ARQ:
         try:
             pool = await _get_arq_pool()
@@ -53,6 +65,19 @@ async def _dispatch(scan_id: int, auth_token: str | None = None, options: dict |
         except Exception as exc:  # noqa: BLE001 — never block scan creation on the queue
             log.warning(f'arq enqueue failed for scan {scan_id} ({exc}); running in-process')
     _run_in_process(scan_id, auth_token=auth_token, options=options)
+
+
+async def _guard_active_limit(db, actor: Actor) -> None:
+    """One account can't flood the scanners: cap its queued + running scans."""
+    if actor.is_admin:
+        return
+    await scan_dao.lock_owner(db, actor.id)
+    limit = settings.SHASEC_MAX_ACTIVE_SCANS_PER_USER
+    if await scan_dao.count_active(db, actor.id) >= limit:
+        raise errors.ConflictError(
+            msg=(f'Vous avez déjà {limit} scan(s) en cours. '
+                 'Attendez la fin du scan en cours avant d’en lancer un autre.')
+        )
 
 
 def _guard_options(actor: Actor, *, allow_active_exploitation: bool = False,
@@ -113,6 +138,7 @@ class ScanService:
             # read above gives clear errors on the common path; this conditional
             # update closes the race between two concurrent starts — only the
             # caller that flips the row proceeds, the loser's rowcount is 0.
+            await _guard_active_limit(db, actor)
             claimed = await scan_dao.claim_for_start(db, pk)
             if claimed == 0:
                 raise errors.ConflictError(msg='Scan already started (concurrent start)')
@@ -156,6 +182,7 @@ class ScanService:
                 )
 
         async with async_db_session.begin() as db:
+            await _guard_active_limit(db, actor)
             target = await target_dao.select_model_by_column(db, url=target_param.url, owner_id=actor.id)
             if not target:
                 target = await target_dao.create(db, target_param, owner_id=actor.id)
@@ -172,6 +199,7 @@ class ScanService:
                 owner_id=actor.id,
             )
             await db.flush()  # populate scan.id before the transaction commits
+            scan.status = ScanStatus.queued.value
             await credit_service.charge_scan(db, actor, scan)
             scan_id = scan.id
 
@@ -188,11 +216,19 @@ class ScanService:
         async with async_db_session.begin() as db:
             scan = await scan_dao.get(db, pk)
             ensure_access(actor, scan, not_found='Scan not found')
-            if scan.status not in (ScanStatus.pending.value, ScanStatus.running.value):
+            active = (ScanStatus.pending.value, ScanStatus.queued.value, ScanStatus.running.value)
+            if scan.status not in active:
                 raise errors.ForbiddenError(msg=f'Scan cannot be cancelled (status={scan.status})')
-            return await scan_dao.update(
+            was_queued = scan.status == ScanStatus.queued.value  # read before the UPDATE syncs it
+            count = await scan_dao.update(
                 db, pk, {'status': ScanStatus.failed.value, 'error': 'Cancelled by user'}
             )
+            # Never started: nothing was consumed, give the credits back. (The
+            # worker skips a job whose scan is no longer queued.)
+            if was_queued:
+                await credit_service.refund_scan(db, pk, note='Scan annulé avant démarrage')
+        await publish_progress(pk, 'failed', status='failed', message='Annulé')
+        return count
 
     @staticmethod
     async def delete(*, actor: Actor, pk: list[int]) -> int:
