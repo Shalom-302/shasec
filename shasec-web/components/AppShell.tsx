@@ -18,6 +18,7 @@ const NAV = [
 ];
 const ADMIN_NAV = [
   { href: '/admin/requests', label: 'Demandes d’audit', icon: IconShield },
+  { href: '/admin/users', label: 'Utilisateurs', icon: IconUser },
   { href: '/admin', label: 'Administration', icon: IconShield },
   { href: '/operator', label: 'Console opérateur', icon: IconTerminal },
 ];

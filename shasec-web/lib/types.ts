@@ -168,3 +168,52 @@ export type Notification = {
   is_read: boolean;
   created_time: string;
 };
+
+// --- Admin user-management console ---
+export type RiskLevel = 'none' | 'low' | 'medium' | 'high';
+
+export type RiskSignal = {
+  code: string;
+  label: string;
+  detail: string;
+  severity: 'low' | 'medium' | 'high';
+};
+
+export type AdminUserListItem = {
+  id: number;
+  x_id: string;
+  email: string;
+  firstname?: string | null;
+  lastname?: string | null;
+  status: boolean;
+  is_admin: boolean;
+  roles: string[];
+  join_time?: string | null;
+  last_login_time?: string | null;
+  credits: number;
+  free_scans: number;
+  scan_count: number;
+  active_scans: number;
+  failed_scans: number;
+  pending_requests: number;
+  targets_count: number;
+  risk_level: RiskLevel;
+  risk_count: number;
+};
+
+export type AdminUserDetail = AdminUserListItem & {
+  authorized_targets: number;
+  active_requests_total: number;
+  distinct_active_domains: number;
+  next_expiry?: string | null;
+  signals: RiskSignal[];
+};
+
+export type AdminAudit = {
+  id: number;
+  admin_id?: number | null;
+  target_user_id?: number | null;
+  action: string;
+  note?: string | null;
+  created_time: string;
+};
