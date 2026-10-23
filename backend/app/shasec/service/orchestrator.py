@@ -118,6 +118,23 @@ async def _run_exploit_stage(
     log.info(f'shasec scan {scan_id} exploit stage: {confirmed}/{len(tagged)} confirmed proof(s)')
 
 
+async def _mark_failed(scan_id: int, exc: Exception) -> None:
+    log.error(f'shasec scan {scan_id} failed: {exc}')
+    await publish_progress(scan_id, 'failed', status='failed', message=str(exc)[:200])
+    async with async_db_session.begin() as db:
+        await scan_dao.update(
+            db,
+            scan_id,
+            {
+                'status': ScanStatus.failed.value,
+                'error': str(exc)[:500],
+                'completed_at': timezone.now(),
+            },
+        )
+        # A failed scan never costs the customer: give back what it debited.
+        await credit_service.refund_scan(db, scan_id)
+
+
 async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dict | None = None) -> None:
     """Execute the full scan pipeline for one scan and persist its findings.
 
@@ -125,17 +142,25 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dic
     Scan.status state machine is the source of truth. Phase 2 moves this behind
     an arq worker for durability — the body stays identical.
     """
-    async with async_db_session() as db:
-        scan = await scan_dao.get(db, scan_id)
-        target = await target_dao.get(db, scan.target_id) if scan else None
-    if not scan or not target:
-        return
+    # Setup failures (DB/schema errors, missing target) must also end the scan:
+    # otherwise it stays "running" forever and its credits are never refunded.
+    try:
+        async with async_db_session() as db:
+            scan = await scan_dao.get(db, scan_id)
+            target = await target_dao.get(db, scan.target_id) if scan else None
+        if not scan:
+            return
+        if not target:
+            raise RuntimeError('Target not found')
 
-    async with async_db_session.begin() as db:
-        await scan_dao.update(
-            db, scan_id, {'status': ScanStatus.running.value, 'started_at': timezone.now()}
-        )
-    await publish_progress(scan_id, 'started', message=f'Scan de {target.url} démarré')
+        async with async_db_session.begin() as db:
+            await scan_dao.update(
+                db, scan_id, {'status': ScanStatus.running.value, 'started_at': timezone.now()}
+            )
+        await publish_progress(scan_id, 'started', message=f'Scan de {target.url} démarré')
+    except Exception as exc:  # noqa: BLE001
+        await _mark_failed(scan_id, exc)
+        return
 
     try:
         profile = (scan.profile or ScanProfile.standard.value)
@@ -230,17 +255,4 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dic
         await publish_progress(scan_id, 'completed', status='completed', message='Terminé')
         log.info(f'shasec scan {scan_id} completed: {len(aggregated)} finding(s)')
     except Exception as exc:  # noqa: BLE001
-        log.error(f'shasec scan {scan_id} failed: {exc}')
-        await publish_progress(scan_id, 'failed', status='failed', message=str(exc)[:200])
-        async with async_db_session.begin() as db:
-            await scan_dao.update(
-                db,
-                scan_id,
-                {
-                    'status': ScanStatus.failed.value,
-                    'error': str(exc)[:500],
-                    'completed_at': timezone.now(),
-                },
-            )
-            # A failed scan never costs the customer: give back what it debited.
-            await credit_service.refund_scan(db, scan_id)
+        await _mark_failed(scan_id, exc)
