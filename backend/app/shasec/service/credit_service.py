@@ -33,6 +33,11 @@ from backend.utils.timezone import timezone
 _CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
 
+def advanced_cost(profile: str) -> int:
+    from backend.core.conf import settings as _s
+    return scan_cost(profile) + _s.CREDITS_ACTIVE_SURCHARGE
+
+
 def scan_cost(profile: str) -> int:
     return {
         ScanProfile.fast.value: settings.CREDITS_COST_FAST,
@@ -166,7 +171,9 @@ class CreditService:
         )).scalars())
         credit_grants = [g for g in grants if g.kind == CreditKind.credit.value]
         free_grants = [g for g in grants if g.kind == CreditKind.free_scan.value]
-        cost = scan_cost(scan.profile)
+        # Advanced (active) audits cost more and are never covered by free scans.
+        active = bool(getattr(scan, 'allow_active_exploitation', False))
+        cost = scan_cost(scan.profile) + (settings.CREDITS_ACTIVE_SURCHARGE if active else 0)
 
         if sum(g.remaining for g in credit_grants) >= cost:
             CreditService._drain(db, actor.id, credit_grants, cost, CreditKind.credit.value, scan.id)
@@ -174,13 +181,15 @@ class CreditService:
             scan.credits_charged = cost
             return
 
-        if free_grants and getattr(scan.profile, 'value', scan.profile) in settings.CREDITS_FREE_PROFILES:
+        if not active and free_grants and getattr(scan.profile, 'value', scan.profile) in settings.CREDITS_FREE_PROFILES:
             CreditService._drain(db, actor.id, free_grants, 1, CreditKind.free_scan.value, scan.id)
             scan.billing = ScanBilling.free.value
             scan.credits_charged = 0
             return
 
-        if free_grants:
+        if active:
+            msg = f'Crédits insuffisants : un audit avancé coûte {cost} crédit(s).'
+        elif free_grants:
             msg = (f'Le profil « {scan.profile} » nécessite {cost} crédit(s). '
                    f'Les scans gratuits sont limités aux profils : {", ".join(settings.CREDITS_FREE_PROFILES)}.')
         else:

@@ -80,6 +80,12 @@ class Settings(BaseSettings):
     SHASEC_MAX_CONCURRENT_SCANS: int = 2
     # Queued + running scans a self-service account may have at once (admins: unlimited).
     SHASEC_MAX_ACTIVE_SCANS_PER_USER: int = 1
+    # Extra credits for an advanced (active-exploitation) audit, on top of the
+    # profile price. Advanced audits run XSS/CSRF/BOLA/BFLA/injection probes and
+    # require an admin to approve the request first.
+    CREDITS_ACTIVE_SURCHARGE: int = 4
+    # Pending advanced-audit requests a self-service account may have at once.
+    SHASEC_MAX_PENDING_REQUESTS_PER_USER: int = 3
 
     # Kortex Security SaaS — accounts, credits and target ownership.
     # Role given to self-registered accounts. Admins (role "admin") see every

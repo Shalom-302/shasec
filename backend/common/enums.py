@@ -159,10 +159,12 @@ class TargetType(StrEnum):
 class ScanStatus(StrEnum):
     """Lifecycle of a scan. The Scan.status column is the single source of truth.
 
-    pending -> queued (billed, waiting for a worker slot) -> running -> completed | failed
+awaiting_approval (advanced/active audit, credits reserved) -> queued
+    (approved by an admin, waiting for a worker slot) -> running -> completed | failed
     """
 
     pending = "pending"
+    awaiting_approval = "awaiting_approval"
     queued = "queued"
     running = "running"
     completed = "completed"

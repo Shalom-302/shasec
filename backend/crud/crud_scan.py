@@ -68,6 +68,13 @@ class CRUDScan(CRUDBase[Scan]):
         )
         return int((await db.execute(stmt)).scalar() or 0)
 
+    async def count_awaiting(self, db: AsyncSession, owner_id: int) -> int:
+        stmt = select(func.count()).select_from(self.model).where(
+            self.model.owner_id == owner_id,
+            self.model.status == ScanStatus.awaiting_approval.value,
+        )
+        return int((await db.execute(stmt)).scalar() or 0)
+
     async def queue_position(self, db: AsyncSession, pk: int) -> int:
         """1-based position among queued scans (FIFO by id)."""
         stmt = select(func.count()).select_from(self.model).where(

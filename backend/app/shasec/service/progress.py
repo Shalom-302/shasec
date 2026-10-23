@@ -30,6 +30,7 @@ PHASES = [
     'Terminé',
 ]
 _EVENT_PHASE = {
+    'awaiting_approval': ('En attente de validation', 0),
     'queued': ("File d'attente", 0),
     'started': ('Initialisation', 5),
     'scanners.start': ('Reconnaissance & scan', 10),
@@ -111,7 +112,9 @@ def describe(events: list[dict], db_status: str | None = None) -> dict:
         phase = _EVENT_PHASE.get(name, (None, None))[0]
         if ev.get('message') is not None:
             last_msg = ev.get('message')
-        if name == 'queued':
+        if name == 'awaiting_approval':
+            status = 'awaiting_approval'
+        elif name == 'queued':
             status = 'queued'
         elif name == 'started':
             status = 'running'

@@ -4,8 +4,9 @@ from sqlalchemy import Select
 
 from backend.app.shasec.schema.scan import CreateScanParam
 from backend.app.shasec.schema.target import CreateTargetParam
-from backend.app.shasec.service.access import Actor, ensure_access
+from backend.app.shasec.service.access import Actor, ensure_access, require_admin
 from backend.app.shasec.service.credit_service import credit_service
+from backend.app.shasec.service.notification_service import notification_service
 from backend.app.shasec.service.orchestrator import run_pipeline
 from backend.app.shasec.service.progress import publish as publish_progress
 from backend.common.enums import ScanStatus
@@ -15,6 +16,7 @@ from backend.core.conf import settings
 from backend.crud.crud_scan import scan_dao
 from backend.crud.crud_target import target_dao
 from backend.database.db_postgres import async_db_session
+from backend.utils.timezone import timezone
 from backend.models import Scan
 
 # Strong refs to in-flight in-process tasks (the fallback path) so the event loop
@@ -151,6 +153,122 @@ class ScanService:
             return await scan_dao.get(db, pk)
 
     @staticmethod
+    async def request_advanced(*, actor: Actor, target_id: int, profile: str = 'deep',
+                               scope_note: str | None = None) -> Scan:
+        """Submit an advanced (active-exploitation) audit for admin approval.
+
+        Credits are reserved now; the scan waits in ``awaiting_approval`` until an
+        admin approves (-> queued) or rejects (-> refund). Active audits run the
+        XSS/CSRF/BOLA/BFLA/injection probes, so they never auto-run for a
+        self-service account.
+        """
+        if actor.is_admin:
+            return await ScanService.quick_by_target(
+                actor=actor, target_id=target_id, profile=profile, allow_active_exploitation=True)
+        async with async_db_session.begin() as db:
+            target = await target_dao.get(db, target_id)
+            ensure_access(actor, target, not_found='Target not found')
+            if not target.is_authorized:
+                raise errors.ForbiddenError(
+                    msg="Autorisez d'abord cette cible (acceptation des conditions d'utilisation).")
+            pending = await scan_dao.count_awaiting(db, actor.id)
+            if pending >= settings.SHASEC_MAX_PENDING_REQUESTS_PER_USER:
+                raise errors.ConflictError(
+                    msg=f'Vous avez deja {pending} demande(s) en attente de validation.')
+            scan = await scan_dao.create(
+                db,
+                CreateScanParam(target_id=target.id, allow_active_exploitation=True, profile=profile),
+                owner_id=actor.id,
+            )
+            await db.flush()
+            scan.status = ScanStatus.awaiting_approval.value
+            scan.scope_note = (scope_note or '').strip()[:2000] or None
+            await credit_service.charge_scan(db, actor, scan)
+            scan_id, host = scan.id, target.url
+        await publish_progress(scan_id, 'awaiting_approval', status='awaiting_approval',
+                               message='En attente de validation par un administrateur')
+        await notification_service.notify_admins(
+            kind='audit_request',
+            title='Nouvelle demande audit avance',
+            body=f'Scan #{scan_id} - {host} - profil {profile}. En attente de validation.',
+            link='/admin/requests',
+        )
+        async with async_db_session() as db:
+            return await scan_dao.get(db, scan_id)
+
+    @staticmethod
+    async def pending_approval_select(*, actor: Actor) -> Select:
+        require_admin(actor)
+        return await scan_dao.get_list(status=ScanStatus.awaiting_approval.value)
+
+    @staticmethod
+    async def approve(*, actor: Actor, pk: int, note: str | None = None) -> Scan:
+        require_admin(actor)
+        async with async_db_session.begin() as db:
+            scan = await scan_dao.get(db, pk)
+            if not scan:
+                raise errors.NotFoundError(msg='Scan not found')
+            if scan.status != ScanStatus.awaiting_approval.value:
+                raise errors.ConflictError(msg=f'Request already handled (status={scan.status})')
+            await scan_dao.update(db, pk, {
+                'status': ScanStatus.queued.value, 'reviewed_by': actor.id,
+                'reviewed_at': timezone.now(), 'review_note': (note or '').strip()[:1000] or None,
+            })
+            owner_id = scan.owner_id
+        await notification_service.notify_user(
+            owner_id, kind='audit_decision', title='Audit avance approuve',
+            body=f'Votre audit avance (scan #{pk}) a ete valide et va demarrer.', link=f'/scans/{pk}')
+        await _dispatch(pk)
+        async with async_db_session() as db:
+            return await scan_dao.get(db, pk)
+
+    @staticmethod
+    async def reject(*, actor: Actor, pk: int, note: str | None = None) -> Scan:
+        require_admin(actor)
+        async with async_db_session.begin() as db:
+            scan = await scan_dao.get(db, pk)
+            if not scan:
+                raise errors.NotFoundError(msg='Scan not found')
+            if scan.status != ScanStatus.awaiting_approval.value:
+                raise errors.ConflictError(msg=f'Request already handled (status={scan.status})')
+            reason = (note or '').strip()[:1000] or 'Demande refusee'
+            await scan_dao.update(db, pk, {
+                'status': ScanStatus.failed.value, 'error': f'Demande refusee : {reason}',
+                'reviewed_by': actor.id, 'reviewed_at': timezone.now(), 'review_note': reason,
+            })
+            await credit_service.refund_scan(db, pk, note='Demande audit refusee')
+            owner_id = scan.owner_id
+        await publish_progress(pk, 'failed', status='failed', message='Demande refusee')
+        await notification_service.notify_user(
+            owner_id, kind='audit_decision', title='Audit avance refuse',
+            body=f'Votre demande (scan #{pk}) a ete refusee. Les credits ont ete restitues.', link=f'/scans/{pk}')
+        async with async_db_session() as db:
+            return await scan_dao.get(db, pk)
+
+    @staticmethod
+    async def quick_by_target(*, actor: Actor, target_id: int, profile: str = 'deep',
+                              allow_active_exploitation: bool = False) -> Scan:
+        """Create + bill + start a scan on an already-authorized owned target."""
+        async with async_db_session.begin() as db:
+            target = await target_dao.get(db, target_id)
+            ensure_access(actor, target, not_found='Target not found')
+            if not target.is_authorized:
+                raise errors.ForbiddenError(msg='Target is not authorized for scanning.')
+            await _guard_active_limit(db, actor)
+            scan = await scan_dao.create(
+                db,
+                CreateScanParam(target_id=target.id, allow_active_exploitation=allow_active_exploitation, profile=profile),
+                owner_id=actor.id,
+            )
+            await db.flush()
+            scan.status = ScanStatus.queued.value
+            await credit_service.charge_scan(db, actor, scan)
+            scan_id = scan.id
+        await _dispatch(scan_id)
+        async with async_db_session() as db:
+            return await scan_dao.get(db, scan_id)
+
+    @staticmethod
     async def quick(
         *, actor: Actor, url: str, type: str, name: str | None = None, allow_active_exploitation: bool = False,
         profile: str = 'standard', aggression: str = 'safe',
@@ -216,16 +334,17 @@ class ScanService:
         async with async_db_session.begin() as db:
             scan = await scan_dao.get(db, pk)
             ensure_access(actor, scan, not_found='Scan not found')
-            active = (ScanStatus.pending.value, ScanStatus.queued.value, ScanStatus.running.value)
+            active = (ScanStatus.pending.value, ScanStatus.awaiting_approval.value,
+                      ScanStatus.queued.value, ScanStatus.running.value)
             if scan.status not in active:
                 raise errors.ForbiddenError(msg=f'Scan cannot be cancelled (status={scan.status})')
-            was_queued = scan.status == ScanStatus.queued.value  # read before the UPDATE syncs it
+            refundable = scan.status in (ScanStatus.queued.value, ScanStatus.awaiting_approval.value)
             count = await scan_dao.update(
                 db, pk, {'status': ScanStatus.failed.value, 'error': 'Cancelled by user'}
             )
             # Never started: nothing was consumed, give the credits back. (The
             # worker skips a job whose scan is no longer queued.)
-            if was_queued:
+            if refundable:
                 await credit_service.refund_scan(db, pk, note='Scan annulé avant démarrage')
         await publish_progress(pk, 'failed', status='failed', message='Annulé')
         return count

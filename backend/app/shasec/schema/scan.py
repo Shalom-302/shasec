@@ -14,6 +14,17 @@ class CreateScanParam(SchemaBase):
     profile: ScanProfile = ScanProfile.standard
 
 
+class AdvancedScanParam(SchemaBase):
+    """Request an advanced (active-exploitation) audit — needs admin approval."""
+    target_id: int
+    profile: ScanProfile = ScanProfile.deep
+    scope_note: str | None = None
+
+
+class ReviewParam(SchemaBase):
+    note: str | None = None
+
+
 class QuickScanParam(SchemaBase):
     """One-shot scan straight from a URL (target is created/reused behind it)."""
 
@@ -49,6 +60,9 @@ class GetScanDetails(SchemaBase):
     owner_id: int | None = None
     billing: ScanBilling = ScanBilling.admin
     credits_charged: int = 0
+    scope_note: str | None = None
+    reviewed_at: datetime | None = None
+    review_note: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None

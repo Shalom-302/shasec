@@ -24,7 +24,7 @@ class Scan(Base):
         sa.ForeignKey('target.id', ondelete='CASCADE'), index=True, comment='Audited target'
     )
     status: Mapped[str] = mapped_column(
-        sa.String(16), default=ScanStatus.pending.value, comment='pending / running / completed / failed'
+        sa.String(32), default=ScanStatus.pending.value, comment='pending / awaiting_approval / queued / running / completed / failed'
     )
     # Depth/speed profile (methodology §3 staged hunt). Controls which plugin
     # tiers run and the scanner-stage wall-clock budget.
@@ -46,6 +46,20 @@ class Scan(Base):
     )
     credits_charged: Mapped[int] = mapped_column(
         sa.Integer, default=0, comment='Credits debited for this scan'
+    )
+    # Advanced (active) audit approval trail. A client submits a request with a
+    # scope note; an admin approves (-> queued) or rejects (-> failed + refund).
+    scope_note: Mapped[str | None] = mapped_column(
+        sa.String(2000), init=False, default=None, comment='Client scope/justification for an advanced audit'
+    )
+    reviewed_by: Mapped[int | None] = mapped_column(
+        sa.ForeignKey('user.id', ondelete='SET NULL'), init=False, default=None, comment='Admin who reviewed the request'
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), init=False, default=None
+    )
+    review_note: Mapped[str | None] = mapped_column(
+        sa.String(1000), init=False, default=None, comment='Admin decision note (e.g. rejection reason)'
     )
     started_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), init=False, default=None

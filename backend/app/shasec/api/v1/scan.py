@@ -6,13 +6,13 @@ from fastapi import APIRouter, Path, Query, Request, Response, WebSocket
 from backend.app.shasec.schema.ai_analysis import GetAIAnalysisDetails
 from backend.app.shasec.schema.finding import GetFindingDetails
 from backend.app.shasec.schema.report import GetReportDetails
-from backend.app.shasec.schema.scan import CreateScanParam, GetScanDetails, QuickScanParam
+from backend.app.shasec.schema.scan import AdvancedScanParam, CreateScanParam, GetScanDetails, QuickScanParam, ReviewParam
 from backend.app.shasec.service.finding_service import finding_service
 from backend.app.shasec.service.progress import channel as progress_channel
 from backend.app.shasec.service.progress import describe as progress_describe
 from backend.app.shasec.service.progress import snapshot as progress_snapshot
 from backend.app.shasec.service.report_service import report_service
-from backend.app.shasec.service.access import Actor, actor_from
+from backend.app.shasec.service.access import Actor, actor_from, require_admin
 from backend.app.shasec.service.scan_service import scan_service
 from backend.common.enums import ScanBilling, ScanStatus
 from backend.crud.crud_scan import scan_dao
@@ -42,6 +42,14 @@ async def _reportable_scan(request: Request, pk: int):
             msg='Les rapports détaillés sont réservés aux scans payés en crédits.'
         )
     return scan
+
+
+@router.get('/pending-approval', summary='[admin] Advanced audits awaiting approval',
+            dependencies=[DependsJwtAuth, DependsPagination])
+async def get_pending_approval(request: Request, db: CurrentSession) -> ResponseModel:
+    stmt = await scan_service.pending_approval_select(actor=actor_from(request))
+    page_data = await paging_data(db, stmt, GetScanDetails)
+    return response_base.success(request=request, data=page_data)
 
 
 @router.get('/{pk}', summary='Get scan by ID', dependencies=[DependsJwtAuth])
@@ -83,6 +91,26 @@ async def quick_scan(request: Request, obj: QuickScanParam) -> ResponseModel:
     )
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)
+
+
+@router.post('/advanced', summary='Request an advanced (active) audit — needs admin approval',
+             dependencies=[DependsJwtAuth])
+async def request_advanced_scan(request: Request, obj: AdvancedScanParam) -> ResponseModel:
+    scan = await scan_service.request_advanced(
+        actor=actor_from(request), target_id=obj.target_id, profile=obj.profile, scope_note=obj.scope_note)
+    return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
+
+
+@router.post('/{pk}/approve', summary='[admin] Approve an advanced audit request', dependencies=[DependsJwtAuth])
+async def approve_scan(request: Request, pk: Annotated[int, Path(...)], obj: ReviewParam) -> ResponseModel:
+    scan = await scan_service.approve(actor=actor_from(request), pk=pk, note=obj.note)
+    return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
+
+
+@router.post('/{pk}/reject', summary='[admin] Reject an advanced audit request', dependencies=[DependsJwtAuth])
+async def reject_scan(request: Request, pk: Annotated[int, Path(...)], obj: ReviewParam) -> ResponseModel:
+    scan = await scan_service.reject(actor=actor_from(request), pk=pk, note=obj.note)
+    return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
 
 
 @router.post('/{pk}/start', summary='Start scan', dependencies=[DependsJwtAuth])
