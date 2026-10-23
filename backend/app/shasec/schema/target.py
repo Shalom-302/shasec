@@ -82,6 +82,10 @@ class UpdateTargetParam(_ValidatedTargetParam):
 
 class AuthorizeTargetParam(SchemaBase):
     is_authorized: bool
+    # Required (true + current version) for a non-admin to authorize: the client
+    # attests ownership / written permission under the terms of use.
+    accept_terms: bool = False
+    terms_version: str | None = None
 
 
 class GetTargetDetails(TargetSchemaBase):
@@ -90,5 +94,8 @@ class GetTargetDetails(TargetSchemaBase):
     id: int
     x_id: str
     is_authorized: bool
+    owner_id: int | None = None
+    authorized_at: datetime | None = None
+    terms_version: str | None = None
     created_time: datetime
     updated_time: datetime | None = None

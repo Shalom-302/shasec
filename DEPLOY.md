@@ -14,8 +14,8 @@ Aucun secret à configurer : le workflow utilise `GITHUB_TOKEN` (intégré) pour
 pousser sur **GHCR**. Au premier push sur `main`, l'image est publiée sous
 `ghcr.io/shalom-302/shasec`.
 
-> Rends le package GHCR **public** (ou donne à Dokploy un token de lecture) :
-> GitHub → repo → Packages → `shasec` → Package settings → Change visibility.
+> Rends les packages GHCR **publics** (ou donne à Dokploy un token de lecture) :
+> GitHub → repo → Packages → `shasec` **et** `shasec-web` → Package settings → Change visibility.
 
 ## 2. Dokploy
 
@@ -43,12 +43,21 @@ pousser sur **GHCR**. Au premier push sur `main`, l'image est publiée sous
    > compose fournit un défaut non-trivial. ⚠️ Si tu changes `POSTGRES_PASSWORD` APRÈS
    > un 1er boot, supprime le volume `pgdata` (il garde l'ancien mot de passe).
 
-3. **Domaine** : pointe le domaine Dokploy vers le service `api`, port **8000**.
+3. **Domaines** (onglet *Domains* de l'app compose, un domaine par service) :
+   | Service | Port | Rôle |
+   |---|---|---|
+   | `web` | **3000** | Console Kortex Security (Next.js) — c'est l'URL publique des clients |
+   | `api` | **8000** | API (Swagger, CLI shasec, Hermes). Optionnel pour le web : il joint l'API en interne via `http://api:8000` |
+
+   En **HTTP** : décoche *HTTPS* sur le domaine et laisse `WEB_COOKIE_SECURE` à `false`.
+   Quand tu passes en **HTTPS** (Let's Encrypt dans Dokploy), mets `WEB_COOKIE_SECURE=true`
+   pour que les cookies de session aient le flag `Secure`.
 4. **Deploy**. L'entrypoint applique les migrations (`alembic upgrade head`) au boot.
 
 ## 3. Mise à jour
 
-Chaque push sur `main` republie l'image `:latest` ; clique **Redeploy** dans
+Chaque push sur `main` republie les images `shasec:latest` et `shasec-web:latest`
+(même repo, deux images : `Dockerfile` racine et `shasec-web/Dockerfile`) ; clique **Redeploy** dans
 Dokploy (ou configure l'auto-deploy / webhook GHCR) pour tirer la nouvelle image.
 
 ## Notes

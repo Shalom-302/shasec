@@ -3,3 +3,6 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 .env*.local
+
+# The root .gitignore drops Python "lib/" dirs; this one is app source.
+!lib/

@@ -1,0 +1,78 @@
+// Browser-side API client. Every call goes to the same-origin /api/k proxy; the
+// session lives in httpOnly cookies the browser cannot read.
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string, public data: any = null) {
+    super(message);
+  }
+}
+
+type Opts = { method?: string; body?: unknown; query?: Record<string, string | number | undefined | null> };
+
+function qs(query?: Opts['query']) {
+  if (!query) return '';
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+  const s = p.toString();
+  return s ? `?${s}` : '';
+}
+
+function onExpired() {
+  if (typeof window === 'undefined') return;
+  const next = encodeURIComponent(window.location.pathname + window.location.search);
+  window.location.href = `/login?expired=1&next=${next}`;
+}
+
+export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/k${path}${qs(opts.query)}`, {
+      method: opts.method || 'GET',
+      headers: opts.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch {
+    throw new ApiError(0, 'Connexion impossible. Vérifiez votre réseau.');
+  }
+  const json: any = await res.json().catch(() => null);
+  if (res.status === 401) {
+    onExpired();
+    throw new ApiError(401, 'Session expirée, reconnectez-vous.');
+  }
+  if (!res.ok || (json && typeof json.code === 'number' && json.code >= 400)) {
+    throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`, json?.data ?? null);
+  }
+  return (json?.data ?? null) as T;
+}
+
+/** Auth calls go to dedicated routes that set/clear the session cookies. */
+export async function authCall(mode: 'login' | 'register' | 'logout', body?: { email: string; password: string }) {
+  const res = await fetch(`/api/auth/${mode}`, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json: any = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`);
+}
+
+/** Download a binary through the proxy and hand it to the browser as a file. */
+export async function download(path: string, fallbackName: string) {
+  const res = await fetch(`/api/k${path}`);
+  if (res.status === 401) { onExpired(); return; }
+  if (!res.ok) {
+    const json: any = await res.json().catch(() => null);
+    throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`, json?.data ?? null);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get('content-disposition') || '';
+  const name = /filename="?([^";]+)"?/.exec(cd)?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

@@ -8,16 +8,27 @@ httpx, guarded by scope-lock (authorized host only) and read-only-by-default
 import os
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 
 from backend.app.shasec.proxy.flows import FlowStore, HttpFlow, HttpRequest
 from backend.app.shasec.proxy.repeater import ScopeError, WriteBlocked, replay
+from backend.app.shasec.service.access import actor_from, require_admin
 from backend.common.exception import errors
 from backend.common.response.response_schema import ResponseModel, response_base
 from backend.common.schema import SchemaBase
 from backend.common.security.jwt import DependsJwtAuth
 
-router = APIRouter(prefix='/security/proxy', tags=['Security Proxy'])
+
+
+def _operator_only(request: Request) -> None:
+    # The repeater sends arbitrary requests: operators (admins) only, never
+    # self-service SaaS accounts.
+    if not getattr(request.user, 'id', None):
+        raise errors.AuthorizationError()
+    require_admin(actor_from(request))
+
+
+router = APIRouter(prefix='/security/proxy', tags=['Security Proxy'], dependencies=[DependsJwtAuth, Depends(_operator_only)])
 
 # JSONL flow store (env-overridable). Shared with the optional mitm addon.
 _STORE = FlowStore(os.getenv('SHASEC_FLOW_STORE', 'reports/proxy_flows.jsonl'))

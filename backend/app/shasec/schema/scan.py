@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import ConfigDict
 
-from backend.common.enums import ExploitAggression, ScanProfile, ScanStatus, TargetType
+from backend.common.enums import ExploitAggression, ScanBilling, ScanProfile, ScanStatus, TargetType
 from backend.common.schema import SchemaBase
 
 
@@ -12,6 +12,17 @@ class CreateScanParam(SchemaBase):
     allow_active_exploitation: bool = False
     # Depth/speed profile — controls which plugin tiers run (default standard).
     profile: ScanProfile = ScanProfile.standard
+
+
+class AdvancedScanParam(SchemaBase):
+    """Request an advanced (active-exploitation) audit — needs admin approval."""
+    target_id: int
+    profile: ScanProfile = ScanProfile.deep
+    scope_note: str | None = None
+
+
+class ReviewParam(SchemaBase):
+    note: str | None = None
 
 
 class QuickScanParam(SchemaBase):
@@ -46,6 +57,12 @@ class GetScanDetails(SchemaBase):
     status: ScanStatus
     profile: ScanProfile = ScanProfile.standard
     allow_active_exploitation: bool = False
+    owner_id: int | None = None
+    billing: ScanBilling = ScanBilling.admin
+    credits_charged: int = 0
+    scope_note: str | None = None
+    reviewed_at: datetime | None = None
+    review_note: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None

@@ -1,8 +1,9 @@
 name: Build & push image
 
-# Builds the API Docker image and pushes it to GitHub Container Registry (GHCR)
-# on every push to main. Dokploy then pulls ghcr.io/<owner>/shasec:latest in prod
-# (see compose.image.yml). Uses the built-in GITHUB_TOKEN — no extra secrets.
+# Builds the API image (ghcr.io/<owner>/shasec) and the web console image
+# (ghcr.io/<owner>/shasec-web, from shasec-web/) and pushes both to GHCR on every
+# push to main. Dokploy then pulls the :latest tags in prod (see compose.image.yml).
+# Uses the built-in GITHUB_TOKEN — no extra secrets.
 
 on:
   push:
@@ -13,6 +14,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ''            # API -> ghcr.io/<owner>/shasec
+            context: .
+            file: ./Dockerfile
+          - image: '-web'        # web console -> ghcr.io/<owner>/shasec-web
+            context: ./shasec-web
+            file: ./shasec-web/Dockerfile
     permissions:
       contents: read
       packages: write
@@ -34,7 +45,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
@@ -43,10 +54,10 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=build${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=build${{ matrix.image }}

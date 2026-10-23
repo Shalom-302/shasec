@@ -75,6 +75,33 @@ class Settings(BaseSettings):
     # worker container and the API must share this flag. Falls back to in-process if
     # the queue can't be reached. Requires a running `arq ...worker.WorkerSettings`.
     SHASEC_USE_ARQ: bool = False
+    # Scans running at the same time on this host (worker max_jobs, or the
+    # in-process semaphore). Scanners are CPU/network heavy: keep this small.
+    SHASEC_MAX_CONCURRENT_SCANS: int = 2
+    # Queued + running scans a self-service account may have at once (admins: unlimited).
+    SHASEC_MAX_ACTIVE_SCANS_PER_USER: int = 1
+    # Extra credits for an advanced (active-exploitation) audit, on top of the
+    # profile price. Advanced audits run XSS/CSRF/BOLA/BFLA/injection probes and
+    # require an admin to approve the request first.
+    CREDITS_ACTIVE_SURCHARGE: int = 4
+    # Pending advanced-audit requests a self-service account may have at once.
+    SHASEC_MAX_PENDING_REQUESTS_PER_USER: int = 3
+
+    # Kortex Security SaaS — accounts, credits and target ownership.
+    # Role given to self-registered accounts. Admins (role "admin") see every
+    # tenant's data, are never billed and may use active exploitation.
+    REGISTER_DEFAULT_ROLE: str = 'user'
+    # Free tier: one-shot discovery scans per account (never renewed).
+    CREDITS_FREE_SCANS: int = 3
+    # Profiles a free discovery scan may use (deep is credits-only).
+    CREDITS_FREE_PROFILES: list[str] = ['fast', 'standard']
+    # Credit price of one scan, per profile.
+    CREDITS_COST_FAST: int = 1
+    CREDITS_COST_STANDARD: int = 2
+    CREDITS_COST_DEEP: int = 4
+    # Version of the terms of use a client must accept to authorize a target
+    # (bump it with the terms page in shasec-web/lib/terms.ts).
+    TERMS_VERSION: str = '2026-10-23'
 
     # SMTP / email (optional: leave blank to disable outgoing mail)
     SMTP_TLS: str = 'True'

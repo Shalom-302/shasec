@@ -8,6 +8,7 @@ from backend.app.shasec.schema.target import (
     GetTargetDetails,
     UpdateTargetParam,
 )
+from backend.app.shasec.service.access import actor_from
 from backend.app.shasec.service.target_service import target_service
 from backend.common.pagination import DependsPagination, paging_data
 from backend.common.response.response_schema import ResponseModel, response_base
@@ -18,10 +19,14 @@ from backend.utils.serializers import select_as_dict
 router = APIRouter(prefix='/targets', tags=['Target'])
 
 
+def _details(target) -> GetTargetDetails:
+    return GetTargetDetails(**select_as_dict(target))
+
+
 @router.get('/{pk}', summary='Get target by ID', dependencies=[DependsJwtAuth])
 async def get_target(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
-    target = await target_service.get_by_id(pk=pk)
-    data = GetTargetDetails(**select_as_dict(target))
+    target = await target_service.get_by_id(actor=actor_from(request), pk=pk)
+    data = _details(target)
     return response_base.success(request=request, data=data)
 
 
@@ -32,15 +37,15 @@ async def get_pagination_targets(
     name: Annotated[str | None, Query()] = None,
     type: Annotated[str | None, Query()] = None,
 ) -> ResponseModel:
-    target_select = await target_service.get_select(name=name, type=type)
+    target_select = await target_service.get_select(actor=actor_from(request), name=name, type=type)
     page_data = await paging_data(db, target_select, GetTargetDetails)
     return response_base.success(request=request, data=page_data)
 
 
 @router.post('/', summary='Create target', dependencies=[DependsJwtAuth])
 async def create_target(request: Request, obj: CreateTargetParam) -> ResponseModel:
-    target = await target_service.create(obj=obj)
-    data = GetTargetDetails(**select_as_dict(target))
+    target = await target_service.create(actor=actor_from(request), obj=obj)
+    data = _details(target)
     return response_base.success(request=request, data=data)
 
 
@@ -48,25 +53,28 @@ async def create_target(request: Request, obj: CreateTargetParam) -> ResponseMod
 async def update_target(
     request: Request, pk: Annotated[int, Path(...)], obj: UpdateTargetParam
 ) -> ResponseModel:
-    count = await target_service.update(pk=pk, obj=obj)
+    count = await target_service.update(actor=actor_from(request), pk=pk, obj=obj)
     if count > 0:
         return response_base.success(request=request)
     return response_base.fail(request=request)
 
 
-@router.post('/{pk}/authorize', summary='Authorize (or revoke) a target for scanning', dependencies=[DependsJwtAuth])
+@router.post('/{pk}/authorize', summary='Authorize (attest scope, accepting the terms) or revoke a target',
+             dependencies=[DependsJwtAuth])
 async def authorize_target(
     request: Request, pk: Annotated[int, Path(...)], obj: AuthorizeTargetParam
 ) -> ResponseModel:
-    count = await target_service.set_authorization(pk=pk, is_authorized=obj.is_authorized)
-    if count > 0:
-        return response_base.success(request=request)
-    return response_base.fail(request=request)
+    target = await target_service.set_authorization(
+        actor=actor_from(request), pk=pk, is_authorized=obj.is_authorized,
+        accept_terms=obj.accept_terms, terms_version=obj.terms_version,
+        ip=getattr(request.state, 'ip', None),
+    )
+    return response_base.success(request=request, data=_details(target))
 
 
 @router.delete('/', summary='Delete targets', dependencies=[DependsJwtAuth])
 async def delete_targets(request: Request, pk: Annotated[list[int], Query(...)]) -> ResponseModel:
-    count = await target_service.delete(pk=pk)
+    count = await target_service.delete(actor=actor_from(request), pk=pk)
     if count > 0:
         return response_base.success(request=request)
     return response_base.fail(request=request)

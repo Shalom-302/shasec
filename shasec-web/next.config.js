@@ -1,12 +1,11 @@
 /** @type {import('next').NextConfig} */
-const API = process.env.SHAAPI_URL || 'http://localhost:8000';
-
-// Proxy /backend/* (same-origin, called by the browser) to the shaapi API.
-// Same-origin means no CORS to configure on the backend.
+// The browser never talks to the API directly: route handlers under /api/*
+// (app/api) hold the session in httpOnly cookies and forward to SHAAPI_URL
+// server-side, attaching the Bearer token. See lib/server/backend.ts.
 const nextConfig = {
-  async rewrites() {
-    return [{ source: '/backend/:path*', destination: `${API}/api/v1/:path*` }];
-  },
+  poweredByHeader: false,
+  // Self-contained server bundle for the Docker image (see Dockerfile).
+  output: 'standalone',
 };
 
 module.exports = nextConfig;

@@ -157,9 +157,15 @@ class TargetType(StrEnum):
 
 
 class ScanStatus(StrEnum):
-    """Lifecycle of a scan. The Scan.status column is the single source of truth."""
+    """Lifecycle of a scan. The Scan.status column is the single source of truth.
+
+awaiting_approval (advanced/active audit, credits reserved) -> queued
+    (approved by an admin, waiting for a worker slot) -> running -> completed | failed
+    """
 
     pending = "pending"
+    awaiting_approval = "awaiting_approval"
+    queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
@@ -273,3 +279,42 @@ SEVERITY_WEIGHT: dict[str, int] = {
     FindingSeverity.low.value: 2,
     FindingSeverity.info.value: 1,
 }
+
+class CreditKind(StrEnum):
+    """What a credit grant buys.
+
+    - ``free_scan`` : one-shot discovery scans given at signup (counted in scans,
+      not credits; results only, no downloadable report).
+    - ``credit``    : Kortex credits (bought, redeemed from a voucher, monthly
+      subscription allowance or granted by an admin). Scans billed with credits
+      unlock detailed reports.
+    """
+
+    free_scan = "free_scan"
+    credit = "credit"
+
+
+class CreditSource(StrEnum):
+    """Where a credit grant comes from (audit trail / support)."""
+
+    signup = "signup"
+    voucher = "voucher"
+    purchase = "purchase"
+    subscription = "subscription"
+    admin = "admin"
+
+
+class CreditTxReason(StrEnum):
+    """Why a ledger line moved the balance."""
+
+    grant = "grant"
+    scan_debit = "scan_debit"
+    scan_refund = "scan_refund"
+
+
+class ScanBilling(StrEnum):
+    """How a scan was paid for. Drives entitlements (e.g. reports)."""
+
+    free = "free"
+    credits = "credits"
+    admin = "admin"

@@ -43,6 +43,13 @@ class RequestError(BaseExceptionMixin):
         super().__init__(msg=msg, data=data, background=background)
 
 
+class PaymentRequiredError(BaseExceptionMixin):
+    code = StandardResponseCode.HTTP_402
+
+    def __init__(self, *, msg: str = 'Payment Required', data: Any = None, background: BackgroundTask | None = None):
+        super().__init__(msg=msg, data=data, background=background)
+
+
 class ForbiddenError(BaseExceptionMixin):
     code = StandardResponseCode.HTTP_403
 
