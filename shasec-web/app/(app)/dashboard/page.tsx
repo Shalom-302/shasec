@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { IconArrow, IconCheck } from '@/components/icons';
 import { useSession } from '@/components/SessionProvider';
-import { Empty, ErrorBox, Loading, PageHeader, StatusBadge, TextLink } from '@/components/ui';
+import { ErrorBox, Loading, PageHeader, StatusBadge, TextLink } from '@/components/ui';
 import { api } from '@/lib/api';
 import { SEV_FR, SEV_ORDER } from '@/lib/findings';
 import { fmtDate, hostOf, PROFILE_LABEL } from '@/lib/format';
@@ -17,7 +18,10 @@ type Overview = {
 };
 
 const SEV_TEXT: Record<string, string> = {
-  critical: 'text-sev-critical', high: 'text-sev-high', medium: 'text-sev-medium', low: 'text-sev-low', info: 'text-sev-info',
+  critical: 'text-sev-critical', high: 'text-sev-high', medium: 'text-kx-text', low: 'text-kx-text', info: 'text-kx-muted',
+};
+const SEV_DOT: Record<string, string> = {
+  critical: 'bg-sev-critical', high: 'bg-sev-high', medium: 'bg-sev-medium', low: 'bg-sev-low', info: 'bg-sev-info',
 };
 
 export default function DashboardPage() {
@@ -45,8 +49,8 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        sub="Vue d’ensemble de vos applications et de vos audits."
+        title="Vue d’ensemble"
+        sub="L’état de sécurité de vos applications, en un coup d’œil."
         actions={<>
           <Link href="/targets" className="btn-ghost">Ajouter une application</Link>
           <Link href="/scans/new" className="btn">Lancer un scan</Link>
@@ -71,14 +75,12 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {data.targets.total === 0 && (
-            <Empty
-              title="Commencez par ajouter votre application"
-              action={<Link href="/targets" className="btn">Ajouter une application</Link>}
-            >
-              Ajoutez l’URL de votre site ou API, prouvez que vous en êtes propriétaire, puis lancez votre premier scan.
-            </Empty>
-          )}
+          <Onboarding
+            hasTarget={data.targets.total > 0}
+            hasVerified={verified > 0}
+            hasScan={data.scans.total > 0}
+            firstTargetId={data.targets.items[0]?.id}
+          />
 
           <section className="card">
             <div className="mb-3 flex items-center justify-between">
@@ -119,9 +121,11 @@ export default function DashboardPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                   {SEV_ORDER.map(s => (
-                    <div key={s} className="rounded-lg border border-kx-border bg-kx-panel2 p-3 text-center">
-                      <div className={`text-2xl font-extrabold ${SEV_TEXT[s]}`}>{counts[s] || 0}</div>
-                      <div className="text-[11px] uppercase tracking-wide text-kx-muted">{SEV_FR[s]}</div>
+                    <div key={s} className="rounded-xl border border-kx-border bg-white p-4">
+                      <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-kx-muted">
+                        <span className={`h-2.5 w-2.5 rounded-full ${SEV_DOT[s]}`} />{SEV_FR[s]}
+                      </div>
+                      <div className={`font-display text-3xl font-semibold ${SEV_TEXT[s]}`}>{counts[s] || 0}</div>
                     </div>
                   ))}
                 </div>
@@ -137,11 +141,47 @@ export default function DashboardPage() {
 function Stat({ label, value, hint, href }: { label: string; value: React.ReactNode; hint?: string; href?: string }) {
   const body = (
     <>
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs text-kx-muted">{label}{hint ? ` · ${hint}` : ''}</div>
+      <div className="text-sm text-kx-muted">{label}</div>
+      <div className="mt-1 font-display text-3xl font-semibold">{value}</div>
+      {hint && <div className="mt-1 text-xs text-kx-muted">{hint}</div>}
     </>
   );
   return href
-    ? <Link href={href} className="card block hover:border-kx-accent">{body}</Link>
+    ? <Link href={href} className="card block transition hover:-translate-y-0.5 hover:border-kx-navy/20">{body}</Link>
     : <div className="card">{body}</div>;
+}
+
+function Onboarding({ hasTarget, hasVerified, hasScan, firstTargetId }: {
+  hasTarget: boolean; hasVerified: boolean; hasScan: boolean; firstTargetId?: number;
+}) {
+  if (hasTarget && hasVerified && hasScan) return null;
+  const steps = [
+    { done: hasTarget, title: 'Ajoutez votre application', text: 'L’URL de votre site ou de votre API.', href: '/targets', cta: 'Ajouter' },
+    { done: hasVerified, title: 'Prouvez-en la propriété', text: 'Publiez un petit fichier de vérification.', href: firstTargetId ? `/targets/${firstTargetId}` : '/targets', cta: 'Vérifier' },
+    { done: hasScan, title: 'Lancez votre premier scan', text: 'Résultats en quelques minutes.', href: '/scans/new', cta: 'Scanner' },
+  ];
+  const current = steps.findIndex(s => !s.done);
+  return (
+    <section className="overflow-hidden rounded-2xl bg-kx-navy p-6 text-white shadow-card sm:p-8">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/55">Bien démarrer</p>
+      <h2 className="mt-1 font-display text-2xl font-semibold">Votre premier audit en 3 étapes</h2>
+      <ol className="mt-6 grid gap-3 md:grid-cols-3">
+        {steps.map((s, i) => (
+          <li key={s.title} className={`rounded-xl p-4 ${i === current ? 'bg-white text-kx-text' : 'bg-white/5'}`}>
+            <div className="flex items-center gap-3">
+              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold ${
+                s.done ? 'bg-kx-teal text-white' : i === current ? 'bg-black text-white' : 'bg-white/10 text-white/60'}`}>
+                {s.done ? <IconCheck className="h-4 w-4" /> : i + 1}
+              </span>
+              <span className="font-semibold">{s.title}</span>
+            </div>
+            <p className={`mt-2 text-sm ${i === current ? 'text-kx-muted' : 'text-white/60'}`}>{s.text}</p>
+            {i === current && (
+              <Link href={s.href} className="btn btn-sm mt-4">{s.cta} <IconArrow className="h-4 w-4" /></Link>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }

@@ -184,9 +184,9 @@ function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] |
       {items.length > 0 && (
         <>
           <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filtrer par gravité">
-            <button className={sev === '' ? 'btn px-3 py-1' : 'btn-ghost px-3 py-1'} onClick={() => setSev('')}>Toutes · {items.length}</button>
+            <button className={sev === '' ? 'btn btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSev('')}>Toutes · {items.length}</button>
             {SEV_ORDER.filter(s => counts[s]).map(s => (
-              <button key={s} className={sev === s ? 'btn px-3 py-1' : 'btn-ghost px-3 py-1'} onClick={() => setSev(s)}>
+              <button key={s} className={sev === s ? 'btn btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSev(s)}>
                 {SEV_FR[s]} · {counts[s]}
               </button>
             ))}
@@ -204,7 +204,7 @@ function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] |
                   {g.fix && <p><b>Correctif :</b> <span className="text-kx-muted">{g.fix}</span></p>}
                   {g.fr !== g.title && <p className="text-xs text-kx-muted">Intitulé de l’outil : {g.title}</p>}
                   {g.samples.length > 0 && (
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-kx-border bg-kx-bg p-2 font-mono text-xs">
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-kx-border bg-kx-panel2 p-2 font-mono text-xs">
                       {g.samples.join('\n')}{g.count > g.samples.length ? `\n… (+${g.count - g.samples.length})` : ''}
                     </pre>
                   )}

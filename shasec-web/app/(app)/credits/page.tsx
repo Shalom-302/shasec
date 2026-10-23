@@ -69,7 +69,7 @@ export default function CreditsPage() {
             <div className="space-y-2">
               <p><span className="text-3xl font-extrabold">{balance.credits}</span> <span className="text-kx-muted">crédit{balance.credits > 1 ? 's' : ''}</span></p>
               <p className="text-sm text-kx-muted">{balance.free_scans} scan{balance.free_scans > 1 ? 's' : ''} de découverte restant{balance.free_scans > 1 ? 's' : ''}</p>
-              {balance.next_expiry && <p className="text-xs text-amber-300">Des crédits expirent le {fmtDate(balance.next_expiry, false)}</p>}
+              {balance.next_expiry && <p className="text-xs text-amber-700">Des crédits expirent le {fmtDate(balance.next_expiry, false)}</p>}
               <p className="pt-2 text-xs text-kx-muted">
                 Coût d’un scan : rapide {balance.pricing.fast} · standard {balance.pricing.standard} · approfondi {balance.pricing.deep} crédit(s).
               </p>
@@ -145,7 +145,7 @@ export default function CreditsPage() {
                     <td className="whitespace-nowrap text-kx-muted">{fmtDate(t.created_time)}</td>
                     <td>{REASON_LABEL[t.reason] || t.reason}</td>
                     <td className="text-kx-muted">{t.scan_id ? `Scan #${t.scan_id}` : t.note || '—'}</td>
-                    <td className={`text-right font-mono ${t.delta > 0 ? 'text-green-300' : 'text-kx-text'}`}>
+                    <td className={`text-right font-mono ${t.delta > 0 ? 'text-teal-700' : 'text-kx-text'}`}>
                       {t.delta > 0 ? '+' : ''}{t.delta} {t.kind === 'free_scan' ? 'scan gratuit' : 'cr.'}
                     </td>
                   </tr>

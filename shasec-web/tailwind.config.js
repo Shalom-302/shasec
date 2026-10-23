@@ -4,27 +4,38 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Kortex Security palette — sober dark UI, status colors carry meaning.
+        // Kortex Security palette: white is primary, black secondary.
+        // Color is reserved for meaning (severity, verified state).
         kx: {
-          bg: '#0b1020',
-          panel: '#121a2e',
-          panel2: '#1a2340',
-          border: '#263154',
-          text: '#e6ecff',
-          muted: '#94a0c0',
-          accent: '#4f7cff',
-          ok: '#22c55e',
+          bg: '#f7f7f7',        // app canvas
+          panel: '#ffffff',     // cards
+          panel2: '#f4f4f5',    // subtle fills (inputs, chips, table heads)
+          border: '#e4e4e7',
+          text: '#0a0a0a',
+          muted: '#5f5f66',
+          accent: '#0a0a0a',    // links, focus
+          navy: '#0a0a0a',      // dark surfaces (auth canvas, highlight panels)
+          navy2: '#1c1c1f',
+          cta: '#0a0a0a',       // primary buttons
+          ctaHover: '#27272a',
+          teal: '#209893',
+          tealSoft: '#d7f7f1',
         },
         sev: {
-          critical: '#dc2626',
-          high: '#ea580c',
-          medium: '#d97706',
-          low: '#ca8a04',
-          info: '#64748b',
+          critical: '#c81e4b',
+          high: '#e96c14',
+          medium: '#e0a608',
+          low: '#3898ec',
+          info: '#8f8f8f',
         },
       },
       fontFamily: {
+        sans: ['var(--font-body)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-body)', 'ui-sans-serif', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(6,13,37,.04), 0 4px 16px rgba(6,13,37,.05)',
       },
     },
   },

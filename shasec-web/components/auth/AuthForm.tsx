@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+import { Logo } from '@/components/icons';
 import { authCall } from '@/lib/api';
 
 export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
@@ -32,12 +33,13 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   };
 
   return (
-    <form onSubmit={submit} className="card space-y-4" noValidate>
+    <form onSubmit={submit} className="space-y-5 rounded-3xl bg-white p-6 text-kx-text shadow-2xl sm:p-8" noValidate>
+      <Link href="/" className="mb-2 flex justify-center"><Logo size="lg" /></Link>
       <div>
-        <h1 className="text-lg font-bold">{isRegister ? 'Créer un compte' : 'Connexion'}</h1>
-        {isRegister && (
-          <p className="mt-1 text-sm text-kx-muted">3 scans de découverte offerts à l’inscription.</p>
-        )}
+        <h2 className="font-display text-2xl font-semibold">{isRegister ? 'Créer votre compte' : 'Bon retour parmi nous'}</h2>
+        <p className="mt-1 text-sm text-kx-muted">
+          {isRegister ? '3 scans de découverte offerts à l’inscription.' : 'Connectez-vous pour suivre vos audits.'}
+        </p>
       </div>
       {params.get('expired') && !isRegister && (
         <p className="alert-info">Votre session a expiré, reconnectez-vous.</p>
@@ -58,12 +60,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         </div>
       )}
       {err && <p className="alert-err" role="alert">{err}</p>}
-      <button className="btn w-full" disabled={busy || !email || !password}>
+      <button className="btn w-full py-3 text-base" disabled={busy || !email || !password}>
         {busy ? 'Patientez…' : isRegister ? 'Créer mon compte' : 'Se connecter'}
       </button>
       <p className="text-center text-sm text-kx-muted">
-        {isRegister ? <>Déjà inscrit ? <Link className="text-kx-accent hover:underline" href="/login">Se connecter</Link></>
-          : <>Pas encore de compte ? <Link className="text-kx-accent hover:underline" href="/register">Créer un compte</Link></>}
+        {isRegister ? <>Déjà inscrit ? <Link className="font-semibold underline decoration-black/25 underline-offset-4 hover:decoration-black" href="/login">Se connecter</Link></>
+          : <>Pas encore de compte ? <Link className="font-semibold underline decoration-black/25 underline-offset-4 hover:decoration-black" href="/register">Créer un compte</Link></>}
       </p>
     </form>
   );

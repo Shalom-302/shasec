@@ -4,29 +4,36 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { authCall } from '@/lib/api';
+import { IconCoins, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
 import { useSession } from './SessionProvider';
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/targets', label: 'Mes applications' },
-  { href: '/scans', label: 'Scans' },
-  { href: '/credits', label: 'Crédits & offres' },
-  { href: '/settings', label: 'Compte' },
+  { href: '/dashboard', label: 'Vue d’ensemble', icon: IconHome },
+  { href: '/targets', label: 'Mes applications', icon: IconGlobe },
+  { href: '/scans', label: 'Scans', icon: IconRadar },
+  { href: '/credits', label: 'Crédits & offres', icon: IconCoins },
+  { href: '/settings', label: 'Compte', icon: IconUser },
 ];
 const ADMIN_NAV = [
-  { href: '/admin', label: 'Administration' },
-  { href: '/operator', label: 'Console opérateur' },
+  { href: '/admin', label: 'Administration', icon: IconShield },
+  { href: '/operator', label: 'Console opérateur', icon: IconTerminal },
 ];
 
-function CreditBadge() {
+function CreditPill() {
   const { balance, isAdmin } = useSession();
   if (!balance) return null;
-  if (isAdmin) return <span className="rounded-full border border-kx-accent px-3 py-1 text-xs text-blue-200">Opérateur · illimité</span>;
+  if (isAdmin) {
+    return <span className="rounded-full bg-black px-3.5 py-1.5 text-xs font-medium text-white">Opérateur · illimité</span>;
+  }
   return (
-    <Link href="/credits" className="rounded-full border border-kx-border bg-kx-panel2 px-3 py-1 text-xs hover:border-kx-accent">
-      <b className="text-kx-text">{balance.credits}</b> <span className="text-kx-muted">crédit{balance.credits > 1 ? 's' : ''}</span>
+    <Link href="/credits" className="inline-flex items-center gap-2 rounded-full border border-kx-border bg-white px-3.5 py-1.5 text-xs shadow-sm transition hover:border-black/30">
+      <IconCoins className="h-4 w-4 text-kx-muted" />
+      <b className="text-kx-text">{balance.credits}</b>
+      <span className="text-kx-muted">crédit{balance.credits > 1 ? 's' : ''}</span>
       {balance.free_scans > 0 && (
-        <span className="text-kx-muted"> · {balance.free_scans} scan{balance.free_scans > 1 ? 's' : ''} gratuit{balance.free_scans > 1 ? 's' : ''}</span>
+        <span className="rounded-full bg-kx-tealSoft px-2 py-0.5 font-medium text-teal-900">
+          {balance.free_scans} gratuit{balance.free_scans > 1 ? 's' : ''}
+        </span>
       )}
     </Link>
   );
@@ -36,64 +43,75 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { user, isAdmin } = useSession();
   const [open, setOpen] = useState(false);
-  const items = isAdmin ? [...NAV, ...ADMIN_NAV] : NAV;
 
   const logout = async () => {
     await authCall('logout').catch(() => null);
     window.location.href = '/login';
   };
 
-  const nav = (
-    <nav className="flex flex-col gap-1" aria-label="Navigation principale">
-      {items.map(i => {
-        const active = path === i.href || path.startsWith(`${i.href}/`);
-        return (
-          <Link
-            key={i.href}
-            href={i.href}
-            onClick={() => setOpen(false)}
-            aria-current={active ? 'page' : undefined}
-            className={`rounded-lg px-3 py-2 text-sm ${active ? 'bg-kx-panel2 font-semibold text-kx-text' : 'text-kx-muted hover:bg-kx-panel2/60 hover:text-kx-text'}`}
-          >
-            {i.label}
-          </Link>
-        );
-      })}
-    </nav>
+  const link = (i: (typeof NAV)[number]) => {
+    const active = path === i.href || path.startsWith(`${i.href}/`);
+    const Icon = i.icon;
+    return (
+      <Link
+        key={i.href}
+        href={i.href}
+        onClick={() => setOpen(false)}
+        aria-current={active ? 'page' : undefined}
+        className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+          active ? 'bg-kx-bg font-semibold text-black' : 'text-kx-muted hover:bg-kx-panel2 hover:text-black'
+        }`}
+      >
+        <Icon className={`h-5 w-5 ${active ? 'text-black' : 'text-kx-muted/70 group-hover:text-black'}`} />
+        {i.label}
+      </Link>
+    );
+  };
+
+  const sidebar = (
+    <div className="flex h-full flex-col">
+      <Link href="/dashboard" className="mb-8 block px-2"><Logo /></Link>
+      <Link href="/scans/new" onClick={() => setOpen(false)} className="btn mb-6 w-full">
+        <IconPlus className="h-4 w-4" /> Nouveau scan
+      </Link>
+      <nav className="flex flex-col gap-1" aria-label="Navigation principale">
+        {NAV.map(link)}
+        {isAdmin && (
+          <>
+            <p className="mb-1 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-kx-muted/70">Opérateur</p>
+            {ADMIN_NAV.map(link)}
+          </>
+        )}
+      </nav>
+      <div className="mt-auto border-t border-kx-border pt-4">
+        <p className="truncate px-3 text-xs text-kx-muted" title={user?.email}>{user?.email}</p>
+        <button onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-kx-muted hover:bg-kx-panel2 hover:text-black">
+          <IconLogout className="h-5 w-5 text-kx-muted/70" /> Se déconnecter
+        </button>
+      </div>
+    </div>
   );
 
   return (
     <div className="min-h-screen lg:flex">
-      <aside className="hidden w-60 shrink-0 border-r border-kx-border bg-kx-panel px-4 py-5 lg:flex lg:flex-col">
-        <Link href="/dashboard" className="mb-6 block px-3 text-lg font-bold tracking-tight">
-          Kortex <span className="text-kx-accent">Security</span>
-        </Link>
-        {nav}
-        <div className="mt-auto border-t border-kx-border px-3 pt-4 text-xs text-kx-muted">
-          <p className="truncate" title={user?.email}>{user?.email}</p>
-          <button onClick={logout} className="mt-2 text-kx-text hover:underline">Se déconnecter</button>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-kx-border bg-white px-4 py-6 lg:block">{sidebar}</aside>
+
+      {open && (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+          <button className="absolute inset-0 bg-kx-navy/50" aria-label="Fermer le menu" onClick={() => setOpen(false)} />
+          <aside className="relative h-full w-72 max-w-[85vw] bg-white px-4 py-6">{sidebar}</aside>
         </div>
-      </aside>
+      )}
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-kx-border bg-kx-bg/90 px-4 py-3 backdrop-blur sm:px-6">
-          <div className="flex items-center gap-3 lg:hidden">
-            <button className="btn-ghost px-3 py-1.5" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-controls="mobile-nav">
-              Menu
-            </button>
-            <span className="font-bold">Kortex <span className="text-kx-accent">Security</span></span>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <CreditBadge />
-          </div>
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-kx-border bg-white/85 px-4 py-3 backdrop-blur sm:px-8">
+          <button className="rounded-lg p-2 text-kx-text hover:bg-kx-panel2 lg:hidden" onClick={() => setOpen(true)} aria-label="Ouvrir le menu">
+            <IconMenu />
+          </button>
+          <span className="lg:hidden"><Logo /></span>
+          <div className="ml-auto"><CreditPill /></div>
         </header>
-        {open && (
-          <div id="mobile-nav" className="border-b border-kx-border bg-kx-panel px-4 py-3 lg:hidden">
-            {nav}
-            <button onClick={logout} className="mt-2 px-3 text-sm text-kx-muted hover:text-kx-text">Se déconnecter</button>
-          </div>
-        )}
-        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">{children}</main>
       </div>
     </div>
   );
