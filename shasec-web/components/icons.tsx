@@ -26,7 +26,7 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
     <span className="inline-flex items-center gap-2.5 text-black">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/kortex-logo.svg" alt="Kortex" className={`${h} w-auto`} />
-      <span className={`font-display font-semibold uppercase tracking-[0.2em] ${size === 'lg' ? 'text-base' : 'text-sm'}`}>Security</span>
+      <span className={`font-display font-semibold uppercase tracking-[0.2em] ${size === 'lg' ? 'text-base' : 'text-xs sm:text-sm'}`}>Security</span>
     </span>
   );
 }

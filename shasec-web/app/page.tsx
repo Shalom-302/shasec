@@ -1,6 +1,11 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import Landing from '@/components/landing/Landing';
+
+export const metadata = {
+  title: 'Kortex Security · Audit de sécurité web & API',
+  description: 'Analysez vos sites et vos API, détectez les vulnérabilités et corrigez en priorité. 3 scans offerts.',
+};
 
 export default function Home() {
-  redirect(cookies().get('kx_at')?.value ? '/dashboard' : '/login');
+  return <Landing authed={!!cookies().get('kx_at')?.value} />;
 }
