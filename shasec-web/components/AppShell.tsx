@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { authCall } from '@/lib/api';
 import { IconCoins, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
 import { ActiveScans } from './ActiveScans';
+import { NotificationBell } from './NotificationBell';
 import { useSession } from './SessionProvider';
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
   { href: '/settings', label: 'Compte', icon: IconUser },
 ];
 const ADMIN_NAV = [
+  { href: '/admin/requests', label: 'Demandes d’audit', icon: IconShield },
   { href: '/admin', label: 'Administration', icon: IconShield },
   { href: '/operator', label: 'Console opérateur', icon: IconTerminal },
 ];
@@ -51,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   const link = (i: (typeof NAV)[number]) => {
-    const active = path === i.href || path.startsWith(`${i.href}/`);
+    const active = path === i.href || (i.href !== '/admin' && path.startsWith(`${i.href}/`));
     const Icon = i.icon;
     return (
       <Link
@@ -110,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <IconMenu />
           </button>
           <span className="lg:hidden"><Logo /></span>
-          <div className="ml-auto flex items-center gap-2"><ActiveScans /><CreditPill /></div>
+          <div className="ml-auto flex items-center gap-2"><ActiveScans /><NotificationBell /><CreditPill /></div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">{children}</main>
       </div>

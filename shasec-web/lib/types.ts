@@ -41,7 +41,7 @@ export type Target = {
   updated_time?: string | null;
 };
 
-export type ScanStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed';
+export type ScanStatus = 'pending' | 'awaiting_approval' | 'queued' | 'running' | 'completed' | 'failed';
 export type ScanProfile = 'fast' | 'standard' | 'deep';
 export type ScanBilling = 'free' | 'credits' | 'admin';
 
@@ -55,6 +55,9 @@ export type Scan = {
   owner_id?: number | null;
   billing: ScanBilling;
   credits_charged: number;
+  scope_note?: string | null;
+  reviewed_at?: string | null;
+  review_note?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
   error?: string | null;
@@ -153,5 +156,15 @@ export type Voucher = {
   credit_validity_days?: number | null;
   is_active: boolean;
   note?: string | null;
+  created_time: string;
+};
+
+export type Notification = {
+  id: number;
+  kind: string;
+  title: string;
+  body?: string | null;
+  link?: string | null;
+  is_read: boolean;
   created_time: string;
 };

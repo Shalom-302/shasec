@@ -115,7 +115,9 @@ export default function ScanDetailPage() {
           <ScanProgress scan={s} progress={progress} status={status} />
           {status === 'failed' && (
             <p className="alert-err mt-3">
-              Le scan n’a pas abouti{s.error === 'Cancelled by user' ? ' (annulé à votre demande)' : s.error ? ` : ${s.error}` : ''}.
+              {s.review_note && s.error?.startsWith('Demande refusée')
+                ? `Demande d’audit refusée : ${s.review_note}.`
+                : `Le scan n’a pas abouti${s.error === 'Cancelled by user' ? ' (annulé à votre demande)' : s.error ? ` : ${s.error}` : ''}.`}
               {s.billing !== 'admin' && s.error !== 'Cancelled by user' && ' Les crédits débités ont été restitués.'}
             </p>
           )}

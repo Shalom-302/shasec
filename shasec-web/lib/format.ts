@@ -15,6 +15,7 @@ export function hostOf(url: string) {
 
 export const STATUS_LABEL: Record<ScanStatus, string> = {
   pending: 'En attente',
+  awaiting_approval: 'En attente de validation',
   queued: 'En file d’attente',
   running: 'En cours',
   completed: 'Terminé',
@@ -41,7 +42,7 @@ export const TYPE_LABEL: Record<TargetType, string> = {
 };
 
 export const isTerminal = (s?: string) => s === 'completed' || s === 'failed';
-export const isActive = (s?: string) => s === 'queued' || s === 'running';
+export const isActive = (s?: string) => s === 'queued' || s === 'running' || s === 'awaiting_approval';
 
 export function fmtDuration(fromIso?: string | null, to: number = Date.now()) {
   if (!fromIso) return '';

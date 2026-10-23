@@ -12,7 +12,7 @@ const PHASES = ['Initialisation', 'Reconnaissance & scan', 'Corrélation des ré
 export function ScanProgress({ scan, progress, status }: { scan: Scan; progress: Progress | null; status?: string }) {
   const [now, setNow] = useState(Date.now());
   const [notif, setNotif] = useState(false);
-  const active = status === 'queued' || status === 'running';
+  const active = status === 'queued' || status === 'running' || status === 'awaiting_approval';
 
   useEffect(() => { setNotif(notificationsGranted()); }, []);
   useEffect(() => {
@@ -29,6 +29,12 @@ export function ScanProgress({ scan, progress, status }: { scan: Scan; progress:
 
   return (
     <div className="space-y-5">
+      {status === 'awaiting_approval' && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+          <p className="font-semibold">En attente de validation</p>
+          <p className="mt-1">Votre demande d’audit avancé (tests actifs) a été transmise à un administrateur. Vous serez notifié dès qu’elle est validée, et le scan démarrera automatiquement. Les crédits sont réservés et restitués en cas de refus.</p>
+        </div>
+      )}
       {status === 'queued' && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">
