@@ -49,7 +49,7 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
       if (e?.data?.otp_required) { setOtpEmail(e.data.email || email); setBusy(false); return; }
       setErr(e.status === 429
         ? (isRegister
-          ? 'Trop d’inscriptions depuis cette connexion. Réessayez dans une heure.'
+          ? 'Trop d’inscriptions depuis cette connexion. Réessayez dans 10 minutes.'
           : 'Trop de tentatives. Patientez une minute puis réessayez.')
         : e.message);
       setBusy(false);

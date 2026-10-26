@@ -21,7 +21,9 @@ router = APIRouter(prefix="/auth", tags=["User Auth"])
 @router.post(
     '/register',
     summary='registered user',
-    dependencies=[Depends(RateLimiter(times=5, minutes=60))],  # curb mass sign-up
+    # Per-IP guard, kept loose (CI mobile carriers share IPs); the real anti-spam
+    # limit is per phone number in otp_service.
+    dependencies=[Depends(RateLimiter(times=10, minutes=10))],
 )
 async def register_user(request: Request, response: Response, obj: UserRegister, background_tasks: BackgroundTasks) -> ResponseModel:
     data = await auth_service.register(request=request, response=response, obj=obj, background_tasks=background_tasks)

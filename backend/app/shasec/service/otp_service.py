@@ -28,6 +28,54 @@ def _cooldown_key(email: str) -> str:
     return f'{settings.OTP_REDIS_PREFIX}:cooldown:{email.lower()}'
 
 
+def _phone_count_key(phone: str) -> str:
+    return f'{settings.OTP_REDIS_PREFIX}:phone:{phone}'
+
+
+def _auth_headers() -> dict:
+    headers = {'Content-Type': 'application/json'}
+    if settings.GOWA_BASIC_USER or settings.GOWA_BASIC_PASS:
+        raw = f'{settings.GOWA_BASIC_USER}:{settings.GOWA_BASIC_PASS}'.encode()
+        headers['Authorization'] = 'Basic ' + base64.b64encode(raw).decode()
+    return headers
+
+
+async def _consume_phone_quota(phone: str) -> None:
+    """Count one send for this number; refuse past the hourly cap."""
+    key = _phone_count_key(phone)
+    try:
+        count = await redis_client.incr(key)
+        if count == 1:
+            await redis_client.expire(key, 3600)
+    except Exception as exc:  # noqa: BLE001 - Redis down: don't block sign-up on the counter
+        log.warning(f'otp phone quota unavailable for {phone}: {exc}')
+        return
+    if count > settings.OTP_MAX_SENDS_PER_PHONE_HOUR:
+        raise errors.ForbiddenError(
+            msg="Trop de codes envoyés à ce numéro. Réessayez dans une heure.")
+
+
+async def _ensure_on_whatsapp(phone: str) -> None:
+    """Refuse a number gowa reports as not on WhatsApp, before sending anything.
+
+    Best-effort: if the check itself fails (gowa without /user/check, timeout,
+    unexpected payload) we let the send go through and its own error handling apply.
+    """
+    if not settings.GOWA_URL:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=settings.GOWA_TIMEOUT) as client:
+            resp = await client.get(f'{settings.GOWA_URL.rstrip("/")}/user/check',
+                                    params={'phone': phone}, headers=_auth_headers())
+        on_wa = (resp.json().get('results') or {}).get('is_on_whatsapp') if resp.status_code == 200 else None
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f'gowa user/check failed for {phone}: {exc}')
+        return
+    if on_wa is False:
+        raise errors.ForbiddenError(
+            msg="Ce numéro n’est pas associé à un compte WhatsApp. Vérifiez-le (indicatif compris).")
+
+
 def _gen_code() -> str:
     return ''.join(secrets.choice('0123456789') for _ in range(settings.OTP_LENGTH))
 
@@ -36,10 +84,7 @@ async def _send_whatsapp(phone: str, message: str) -> None:
     if not settings.GOWA_URL:
         raise errors.ServerError(msg="Service WhatsApp non configuré (GOWA_URL).")
     jid = phone if _WA_SUFFIX in phone else f'{phone}{_WA_SUFFIX}'
-    headers = {'Content-Type': 'application/json'}
-    if settings.GOWA_BASIC_USER or settings.GOWA_BASIC_PASS:
-        raw = f'{settings.GOWA_BASIC_USER}:{settings.GOWA_BASIC_PASS}'.encode()
-        headers['Authorization'] = 'Basic ' + base64.b64encode(raw).decode()
+    headers = _auth_headers()
     try:
         async with httpx.AsyncClient(timeout=settings.GOWA_TIMEOUT) as client:
             resp = await client.post(f'{settings.GOWA_URL.rstrip("/")}/send/message',
@@ -56,6 +101,8 @@ class OtpService:
     @staticmethod
     async def start(email: str, phone: str) -> None:
         """Generate a code, store it (TTL + fresh attempt counter), send it."""
+        await _ensure_on_whatsapp(phone)
+        await _consume_phone_quota(phone)
         code = _gen_code()
         try:
             await redis_client.hset(_key(email), mapping={'code': code, 'attempts': 0})
