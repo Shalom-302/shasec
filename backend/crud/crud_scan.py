@@ -75,6 +75,16 @@ class CRUDScan(CRUDBase[Scan]):
         )
         return int((await db.execute(stmt)).scalar() or 0)
 
+    async def count_busy_for_targets(self, db: AsyncSession, target_ids: list[int]) -> int:
+        """Scans of these targets that are still live (awaiting approval, queued, running)."""
+        stmt = select(func.count()).select_from(self.model).where(
+            self.model.target_id.in_(target_ids),
+            self.model.status.in_([
+                ScanStatus.awaiting_approval.value, ScanStatus.queued.value, ScanStatus.running.value,
+            ]),
+        )
+        return int((await db.execute(stmt)).scalar() or 0)
+
     async def queue_position(self, db: AsyncSession, pk: int) -> int:
         """1-based position among queued scans (FIFO by id)."""
         stmt = select(func.count()).select_from(self.model).where(

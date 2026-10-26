@@ -4,6 +4,7 @@ from backend.app.shasec.schema.target import CreateTargetParam, UpdateTargetPara
 from backend.app.shasec.service.access import Actor, ensure_access
 from backend.common.exception import errors
 from backend.core.conf import settings
+from backend.crud.crud_scan import scan_dao
 from backend.crud.crud_target import target_dao
 from backend.database.db_postgres import async_db_session
 from backend.models import Target
@@ -87,6 +88,9 @@ class TargetService:
         async with async_db_session.begin() as db:
             for target_id in pk:
                 ensure_access(actor, await target_dao.get(db, target_id), not_found='Target not found')
+            # Deleting a target cascades to its scans; a live one holds credits.
+            if await scan_dao.count_busy_for_targets(db, pk):
+                raise errors.ForbiddenError(msg='Un scan est en cours sur cette application : annulez-le avant de la supprimer.')
             return await target_dao.delete(db, pk)
 
 

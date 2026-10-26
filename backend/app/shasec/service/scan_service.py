@@ -25,6 +25,8 @@ _RUNNING: set = set()
 _arq_pool = None
 # In-process fallback honours the same concurrency cap as the arq worker.
 _SLOTS: asyncio.Semaphore | None = None
+# Scans that must not be deleted (directly or with their target) until they end.
+_BUSY = (ScanStatus.awaiting_approval.value, ScanStatus.queued.value, ScanStatus.running.value)
 
 
 async def _run_limited(scan_id: int, auth_token: str | None, options: dict | None) -> None:
@@ -353,7 +355,12 @@ class ScanService:
     async def delete(*, actor: Actor, pk: list[int]) -> int:
         async with async_db_session.begin() as db:
             for scan_id in pk:
-                ensure_access(actor, await scan_dao.get(db, scan_id), not_found='Scan not found')
+                scan = await scan_dao.get(db, scan_id)
+                ensure_access(actor, scan, not_found='Scan not found')
+                # A live scan holds reserved credits and a worker slot: cancel it
+                # first (which refunds), then delete.
+                if scan.status in _BUSY:
+                    raise errors.ForbiddenError(msg='Ce scan est en cours : annulez-le avant de le supprimer.')
             return await scan_dao.delete(db, pk)
 
 
