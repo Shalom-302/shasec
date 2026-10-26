@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     OTP_MAX_ATTEMPTS: int = 5           # wrong tries before the code is burned
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
     OTP_REDIS_PREFIX: str = 'shasec:otp'
+    # Prepended to a sign-up phone typed in local format (leading 0, no "+"/"00").
+    PHONE_DEFAULT_COUNTRY_CODE: str = '225'
     GOWA_URL: str = ''
     GOWA_BASIC_USER: str = ''
     GOWA_BASIC_PASS: str = ''
