@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { BulkBar, RowBox, SelectAllBox, useSelection } from '@/components/bulk';
 import { ScopeAttestation } from '@/components/ScopeAttestation';
 import { Empty, ErrorBox, Loading, Pager, PageHeader, TextLink, VerifiedBadge } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -17,6 +18,18 @@ export default function TargetsPage() {
   const { data, error, loading, reload } = useAsync(
     () => api<Page<Target>>('/targets', { query: { page, size: 20 } }), [page],
   );
+
+  const sel = useSelection(data?.items.map(t => t.id) ?? []);
+  const [delErr, setDelErr] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const removeSelected = async () => {
+    const n = sel.count;
+    if (!confirm(`Supprimer ${n === 1 ? 'cette application' : `ces ${n} applications`} et tout leur historique de scans ? Cette action est définitive.`)) return;
+    setDelErr(''); setDeleting(true);
+    try { await api('/targets', { method: 'DELETE', query: { pk: sel.ids } }); reload(); }
+    catch (e: any) { setDelErr(e.message); }
+    finally { setDeleting(false); }
+  };
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -85,13 +98,20 @@ export default function TargetsPage() {
           Ajoutez l’URL de l’application à auditer pour commencer.
         </Empty>
       )}
-      {data && data.items.length > 0 && (
+      {delErr && <div className="mb-4"><ErrorBox message={delErr} /></div>}
+      {data && data.items.length > 0 && (<>
+        <BulkBar sel={sel}>
+          <button className="btn-danger" disabled={deleting} onClick={removeSelected}>
+            {deleting ? 'Suppression…' : 'Supprimer la sélection'}
+          </button>
+        </BulkBar>
         <div className="card overflow-x-auto p-0 sm:p-0">
           <table className="table">
-            <thead><tr><th>Nom</th><th>URL</th><th>Type</th><th>Statut</th><th>Ajoutée le</th><th /></tr></thead>
+            <thead><tr><th className="w-10"><SelectAllBox sel={sel} /></th><th>Nom</th><th>URL</th><th>Type</th><th>Statut</th><th>Ajoutée le</th><th /></tr></thead>
             <tbody>
               {data.items.map(t => (
                 <tr key={t.id}>
+                  <td><RowBox sel={sel} id={t.id} label={`Sélectionner ${t.name}`} /></td>
                   <td className="font-medium"><Link href={`/targets/${t.id}`} className="hover:underline">{t.name}</Link></td>
                   <td className="max-w-[16rem] truncate font-mono text-xs text-kx-muted" title={t.url}>{t.url}</td>
                   <td className="text-kx-muted">{TYPE_LABEL[t.type] || t.type}</td>
@@ -107,7 +127,7 @@ export default function TargetsPage() {
             </tbody>
           </table>
         </div>
-      )}
+      </>)}
       {data && <Pager page={page} totalPages={data.total_pages} onPage={setPage} />}
     </>
   );

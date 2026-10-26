@@ -5,11 +5,12 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from backend.app.shasec.schema.credit import (
     AdminGrantParam,
     CreateVouchersParam,
+    DisableVouchersParam,
     GetCreditBalance,
     GetCreditGrant,
     GetCreditTransaction,
@@ -26,6 +27,7 @@ from backend.common.response.response_schema import ResponseModel, response_base
 from backend.common.security.jwt import DependsJwtAuth
 from backend.core.conf import settings
 from backend.database.db_postgres import CurrentSession, async_db_session
+from backend.models.admin_audit import AdminAudit
 from backend.models.credit import CreditVoucher
 from backend.utils.timezone import timezone
 
@@ -100,6 +102,18 @@ async def list_vouchers(request: Request) -> ResponseModel:
     return response_base.success(request=request, data=data)
 
 
+@router.post('/vouchers/disable', summary='[admin] Disable several credit codes', dependencies=[DependsJwtAuth])
+async def disable_vouchers(request: Request, obj: DisableVouchersParam) -> ResponseModel:
+    require_admin(actor_from(request))
+    async with async_db_session.begin() as db:
+        res = await db.execute(
+            update(CreditVoucher)
+            .where(CreditVoucher.id.in_(obj.ids), CreditVoucher.is_active.is_(True))
+            .values(is_active=False)
+        )
+    return response_base.success(request=request, data={'disabled': res.rowcount})
+
+
 @router.post('/vouchers/{pk}/disable', summary='[admin] Disable a credit code', dependencies=[DependsJwtAuth])
 async def disable_voucher(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
     require_admin(actor_from(request))
@@ -113,7 +127,8 @@ async def disable_voucher(request: Request, pk: Annotated[int, Path(...)]) -> Re
 
 @router.post('/grant', summary='[admin] Grant credits to an account', dependencies=[DependsJwtAuth])
 async def admin_grant(request: Request, obj: AdminGrantParam) -> ResponseModel:
-    require_admin(actor_from(request))
+    actor = actor_from(request)
+    require_admin(actor)
     async with async_db_session.begin() as db:
         user_id = await credit_service.user_id_by_email(db, obj.email)
         expires_at = timezone.now() + timedelta(days=obj.expires_in_days) if obj.expires_in_days else None
@@ -121,5 +136,13 @@ async def admin_grant(request: Request, obj: AdminGrantParam) -> ResponseModel:
             db, user_id=user_id, amount=obj.credits, source=CreditSource.admin.value,
             expires_at=expires_at, note=obj.note,
         )
+        # Same audit trail + client notification as POST /admin/users/{pk}/credits.
+        db.add(AdminAudit(admin_id=actor.id, target_user_id=user_id, action='credit_grant',
+                          note=f'+{obj.credits} crédits' + (f' · {obj.note}' if obj.note else '')))
         data = GetCreditGrant.model_validate(grant)
+    from backend.app.shasec.service.notification_service import notification_service
+    await notification_service.notify_user(
+        user_id, kind='account', title=f'{obj.credits} crédits ont été ajoutés à votre compte',
+        body=obj.note, link='/credits',
+    )
     return response_base.success(request=request, data=data)

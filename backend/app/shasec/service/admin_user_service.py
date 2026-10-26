@@ -27,7 +27,7 @@ from backend.database.db_redis import redis_client
 from backend.models import Role, Scan, Target, User
 from backend.models.admin_audit import AdminAudit
 from backend.models.associations import user_role
-from backend.models.credit import CreditGrant
+from backend.models.credit import CreditGrant, CreditVoucher
 from backend.utils.timezone import timezone
 
 # Risk thresholds (tunable). Kept conservative — a flag is a prompt to look,
@@ -211,6 +211,53 @@ class AdminUserService:
                 'next_expiry': bal.get('next_expiry'),
                 'risk_level': _risk_level(signals), 'risk_count': len(signals), 'signals': signals,
             }
+
+    async def overview(self) -> dict:
+        """Platform-wide counters and recent activity for the admin landing page."""
+        now = timezone.now()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        async def scalar(db: AsyncSession, stmt) -> int:
+            return int((await db.execute(stmt)).scalar() or 0)
+
+        async with async_db_session() as db:
+            data = {
+                'users_total': await scalar(db, select(func.count()).select_from(User)),
+                'users_new_7d': await scalar(db, select(func.count()).select_from(User).where(
+                    User.join_time >= now - timedelta(days=7))),
+                'users_suspended': await scalar(db, select(func.count()).select_from(User).where(
+                    User.status.is_(False))),
+                'scans_today': await scalar(db, select(func.count()).select_from(Scan).where(
+                    Scan.created_time >= day_start)),
+                'scans_running': await scalar(db, select(func.count()).select_from(Scan).where(
+                    Scan.status.in_([ScanStatus.queued.value, ScanStatus.running.value]))),
+                'pending_requests': await scalar(db, select(func.count()).select_from(Scan).where(
+                    Scan.status == ScanStatus.awaiting_approval.value)),
+                'credits_outstanding': await scalar(db, select(func.coalesce(func.sum(CreditGrant.remaining), 0)).where(
+                    CreditGrant.kind == CreditKind.credit.value, CreditGrant.remaining > 0,
+                    or_(CreditGrant.expires_at.is_(None), CreditGrant.expires_at > now))),
+                'credits_granted_30d': await scalar(db, select(func.coalesce(func.sum(CreditGrant.amount), 0)).where(
+                    CreditGrant.kind == CreditKind.credit.value,
+                    CreditGrant.source == CreditSource.admin.value,
+                    CreditGrant.created_time >= now - timedelta(days=30))),
+                'vouchers_active': await scalar(db, select(func.count()).select_from(CreditVoucher).where(
+                    CreditVoucher.is_active.is_(True),
+                    or_(CreditVoucher.valid_until.is_(None), CreditVoucher.valid_until > now))),
+            }
+            recent = (await db.execute(
+                select(User.id, User.email, User.join_time).order_by(User.join_time.desc()).limit(5)
+            )).all()
+            data['recent_users'] = [{'id': r.id, 'email': r.email, 'join_time': r.join_time} for r in recent]
+            actions = (await db.execute(
+                select(AdminAudit, User.email)
+                .outerjoin(User, User.id == AdminAudit.target_user_id)
+                .order_by(AdminAudit.id.desc()).limit(8)
+            )).all()
+            data['recent_actions'] = [{
+                'id': a.id, 'action': a.action, 'note': a.note, 'target_user_id': a.target_user_id,
+                'target_email': email, 'created_time': a.created_time,
+            } for a, email in actions]
+        return data
 
     # ---- actions -------------------------------------------------------------
     @staticmethod

@@ -47,7 +47,11 @@ class HttpSecurityPlugin(ScannerPlugin):
 
     async def run(self, ctx: ScanContext) -> list[RawFinding]:
         findings: list[RawFinding] = []
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        # Probe with certificate verification first so an untrusted/self-signed
+        # cert is reported as a finding (it is a real weakness), then retry with
+        # verification OFF so a bad cert never blocks the header checks — the
+        # host is reachable, we must still read its security headers.
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=False) as client:
             try:
                 resp = await client.get(ctx.target_url)
             except httpx.HTTPError as exc:
@@ -58,6 +62,23 @@ class HttpSecurityPlugin(ScannerPlugin):
                         description=f'Could not connect to {ctx.target_url}: {exc}',
                     )
                 ]
+
+            if ctx.target_url.lower().startswith('https://'):
+                try:
+                    async with httpx.AsyncClient(timeout=10, follow_redirects=False, verify=True) as verified:
+                        await verified.get(ctx.target_url)
+                except httpx.HTTPError as exc:
+                    if 'certificate' in str(exc).lower() or 'ssl' in str(exc).lower():
+                        findings.append(RawFinding(
+                            title='Certificat TLS non fiable',
+                            severity=FindingSeverity.medium.value,
+                            description='Le certificat TLS n\'a pas pu être validé (auto-signé, expiré ou '
+                                        'autorité inconnue). Un visiteur voit un avertissement et le trafic '
+                                        'peut être intercepté (man-in-the-middle).',
+                            evidence=str(exc)[:200],
+                            recommendation='Installer un certificat émis par une autorité reconnue (ex. Let\'s Encrypt).',
+                            fingerprint_seed='http-security-bad-cert',
+                        ))
 
             headers = {k.lower(): v for k, v in resp.headers.items()}
 

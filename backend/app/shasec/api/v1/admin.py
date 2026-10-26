@@ -12,6 +12,7 @@ from fastapi import APIRouter, Path, Query, Request
 from backend.app.shasec.schema.admin_user import (
     AdminAuditItem,
     AdminCreditParam,
+    AdminOverview,
     AdminUserDetail,
     AdminUserListItem,
     ReactivateParam,
@@ -29,6 +30,13 @@ from backend.crud.crud_scan import scan_dao
 from backend.database.db_postgres import CurrentSession
 
 router = APIRouter(prefix='/admin', tags=['Admin · Users'])
+
+
+@router.get('/overview', summary='[admin] Platform counters and recent activity', dependencies=[DependsJwtAuth])
+async def get_overview(request: Request) -> ResponseModel:
+    require_admin(actor_from(request))
+    data = AdminOverview(**await admin_user_service.overview())
+    return response_base.success(request=request, data=data)
 
 
 @router.get('/users', summary='[admin] List client accounts with aggregates & risk', dependencies=[DependsJwtAuth])

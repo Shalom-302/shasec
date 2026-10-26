@@ -60,6 +60,10 @@ class CreateVouchersParam(SchemaBase):
     note: str | None = Field(default=None, max_length=255)
 
 
+class DisableVouchersParam(SchemaBase):
+    ids: list[int] = Field(min_length=1, max_length=500, description='Credit codes to disable')
+
+
 class GetVoucher(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 

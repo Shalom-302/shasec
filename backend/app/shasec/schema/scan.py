@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import ConfigDict
 
-from backend.common.enums import ExploitAggression, ScanBilling, ScanProfile, ScanStatus, TargetType
+from backend.common.enums import ExploitAggression, ScanBilling, ScanMode, ScanProfile, ScanStatus, TargetType
 from backend.common.schema import SchemaBase
 
 
@@ -12,6 +12,8 @@ class CreateScanParam(SchemaBase):
     allow_active_exploitation: bool = False
     # Depth/speed profile — controls which plugin tiers run (default standard).
     profile: ScanProfile = ScanProfile.standard
+    # single URL, or a whole-domain audit (five-step hunt).
+    mode: ScanMode = ScanMode.single
 
 
 class AdvancedScanParam(SchemaBase):
@@ -48,6 +50,20 @@ class QuickScanParam(SchemaBase):
     allow_destructive: bool = False
 
 
+class AuditScanParam(SchemaBase):
+    """Start a whole-domain audit from a URL (admin/operator). Step 1 maps the
+    domain and pauses on awaiting_scope; the operator then selects hosts."""
+    url: str
+    type: TargetType = TargetType.website
+    name: str | None = None
+    profile: ScanProfile = ScanProfile.deep
+    allow_active_exploitation: bool = True
+    aggression: ExploitAggression = ExploitAggression.safe
+    auth_token: str | None = None
+    id_range: str | None = None
+    allow_destructive: bool = False
+
+
 class GetScanDetails(SchemaBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,6 +72,7 @@ class GetScanDetails(SchemaBase):
     target_id: int
     status: ScanStatus
     profile: ScanProfile = ScanProfile.standard
+    mode: ScanMode = ScanMode.single
     allow_active_exploitation: bool = False
     owner_id: int | None = None
     billing: ScanBilling = ScanBilling.admin

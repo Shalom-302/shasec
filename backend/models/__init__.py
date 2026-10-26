@@ -18,6 +18,7 @@ from backend.models.finding import Finding
 from backend.models.ai_analysis import AIAnalysis
 from backend.models.report import Report
 from backend.models.exploit import Exploit
+from backend.models.scan_asset import ScanAsset
 
 # Auto-import every other module dropped in this package so Alembic
 # autogenerate sees its tables without editing this file: just create

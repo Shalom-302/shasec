@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { Logo } from '@/components/icons';
-import { authCall } from '@/lib/api';
+import { api, authCall } from '@/lib/api';
+import type { CreditBalance } from '@/lib/types';
 
-export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
+export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; admin?: boolean }) {
   const params = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,9 +26,16 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     setBusy(true);
     try {
       await authCall(mode, { email, password });
+      if (admin && !(await api<CreditBalance>('/credits/me'))?.is_admin) {
+        // Same accounts as the client app, but this entry point is for operators only.
+        await authCall('logout').catch(() => null);
+        setErr('Ce compte n’a pas les droits administrateur.');
+        setBusy(false);
+        return;
+      }
       const next = params.get('next');
       // Only same-site relative paths: never an open redirect.
-      window.location.href = next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+      window.location.href = next && next.startsWith('/') && !next.startsWith('//') ? next : admin ? '/admin' : '/dashboard';
     } catch (e: any) {
       setErr(e.status === 429 ? 'Trop de tentatives. Patientez une minute puis réessayez.' : e.message);
       setBusy(false);
@@ -38,9 +46,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     <form onSubmit={submit} className="space-y-5 rounded-3xl bg-white p-6 text-kx-text shadow-2xl sm:p-8" noValidate>
       <Link href="/" className="mb-2 flex justify-center"><Logo size="lg" /></Link>
       <div>
-        <h2 className="font-display text-2xl font-semibold">{isRegister ? 'Créer votre compte' : 'Bon retour parmi nous'}</h2>
+        <h2 className="font-display text-2xl font-semibold">
+          {isRegister ? 'Créer votre compte' : admin ? 'Console administrateur' : 'Bon retour parmi nous'}
+        </h2>
         <p className="mt-1 text-sm text-kx-muted">
-          {isRegister ? '3 scans de découverte offerts à l’inscription.' : 'Connectez-vous pour suivre vos audits.'}
+          {isRegister ? '3 scans de découverte offerts à l’inscription.'
+            : admin ? 'Accès réservé aux opérateurs Kortex.' : 'Connectez-vous pour suivre vos audits.'}
         </p>
       </div>
       {params.get('expired') && !isRegister && (
@@ -71,10 +82,10 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       <button className="btn w-full py-3 text-base" disabled={busy || !email || !password}>
         {busy ? 'Patientez…' : isRegister ? 'Créer mon compte' : 'Se connecter'}
       </button>
-      <p className="text-center text-sm text-kx-muted">
+      {!admin && <p className="text-center text-sm text-kx-muted">
         {isRegister ? <>Déjà inscrit ? <Link className="font-semibold underline decoration-black/25 underline-offset-4 hover:decoration-black" href="/login">Se connecter</Link></>
           : <>Pas encore de compte ? <Link className="font-semibold underline decoration-black/25 underline-offset-4 hover:decoration-black" href="/register">Créer un compte</Link></>}
-      </p>
+      </p>}
     </form>
   );
 }

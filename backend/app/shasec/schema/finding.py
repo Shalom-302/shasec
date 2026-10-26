@@ -17,6 +17,8 @@ class FindingSchemaBase(SchemaBase):
     description: str | None = None
     evidence: str | None = None
     recommendation: str | None = None
+    asset_id: int | None = None
+    owasp: str | None = None
 
 
 class CreateFindingParam(FindingSchemaBase):

@@ -71,3 +71,33 @@ class AdminCreditParam(SchemaBase):
     amount: int = Field(ge=1, le=100000)
     expires_in_days: int | None = Field(default=None, ge=1, le=3650)
     note: str | None = Field(default=None, max_length=255)
+
+
+class AdminRecentUser(SchemaBase):
+    id: int
+    email: str
+    join_time: datetime | None = None
+
+
+class AdminRecentAction(SchemaBase):
+    id: int
+    action: str
+    note: str | None = None
+    target_user_id: int | None = None
+    target_email: str | None = None
+    created_time: datetime
+
+
+class AdminOverview(SchemaBase):
+    """Platform-wide figures for the admin landing page."""
+    users_total: int = 0
+    users_new_7d: int = 0
+    users_suspended: int = 0
+    scans_today: int = 0
+    scans_running: int = 0
+    pending_requests: int = 0
+    credits_outstanding: int = 0
+    credits_granted_30d: int = 0
+    vouchers_active: int = 0
+    recent_users: list[AdminRecentUser] = []
+    recent_actions: list[AdminRecentAction] = []

@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScanProgress } from '@/components/ScanProgress';
+import { ScopePicker } from '@/components/ScopePicker';
 import { ErrorBox, Loading, PageHeader, SeverityBadge, StatusBadge, TextLink } from '@/components/ui';
+import { owaspLabel } from '@/lib/owasp';
 import { api, download } from '@/lib/api';
 import { groupFindings, SEV_FR, SEV_ORDER } from '@/lib/findings';
 import { BILLING_LABEL, fmtDate, isActive, isTerminal, PROFILE_LABEL } from '@/lib/format';
@@ -138,6 +140,12 @@ export default function ScanDetailPage() {
         </section>
       </div>
 
+      {status === 'awaiting_scope' && (
+        <section className="mt-6">
+          <h2 className="mb-3 font-display text-lg font-semibold">Périmètre de l’audit</h2>
+          <ScopePicker scanId={s.id} onLaunched={() => { lastStatus.current = undefined; scan.reload(); }} />
+        </section>
+      )}
       {status === 'completed' && <AnalysisCard state={analysis} />}
       {done && <FindingsCard state={findings} />}
       {status === 'completed' && <ReportsCard scan={s} />}
@@ -204,6 +212,7 @@ function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] |
                 <summary className="flex cursor-pointer items-center gap-3 px-3 py-2.5">
                   <SeverityBadge severity={g.severity} />
                   <span className="flex-1 font-medium">{g.fr}{g.count > 1 ? ` · ${g.count}×` : ''}</span>
+                  {owaspLabel(g.owasp) && <span className="hidden rounded-full bg-kx-panel2 px-2 py-0.5 text-[11px] font-medium text-kx-text sm:inline">{owaspLabel(g.owasp)}</span>}
                   <span className="hidden rounded-full border border-kx-border px-2 py-0.5 text-[11px] text-kx-muted sm:inline">{g.plugin}</span>
                 </summary>
                 <div className="space-y-2 border-t border-kx-border px-3 py-3 text-sm">

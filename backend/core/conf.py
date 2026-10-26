@@ -87,6 +87,15 @@ class Settings(BaseSettings):
     # Pending advanced-audit requests a self-service account may have at once.
     SHASEC_MAX_PENDING_REQUESTS_PER_USER: int = 3
 
+    # Hermes agent — the NL assistant that drives shasec (scans/findings) for the
+    # operator (and, later, premium clients). The backend relays a chat message to
+    # the Hermes HTTP endpoint over the INTERNAL docker network; Hermes is never
+    # exposed publicly. Empty HERMES_URL => the chat route replies 503 (feature off).
+    # Contract: POST {HERMES_URL}  JSON {message, session_id, user} -> {reply}.
+    HERMES_URL: str = ''
+    HERMES_TOKEN: str = ''
+    HERMES_TIMEOUT: int = 180
+
     # Kortex Security SaaS — accounts, credits and target ownership.
     # Role given to self-registered accounts. Admins (role "admin") see every
     # tenant's data, are never billed and may use active exploitation.

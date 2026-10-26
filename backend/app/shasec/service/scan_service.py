@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from sqlalchemy import Select
 
@@ -14,8 +15,10 @@ from backend.common.exception import errors
 from backend.common.log import log
 from backend.core.conf import settings
 from backend.crud.crud_scan import scan_dao
+from backend.crud.crud_scan_asset import scan_asset_dao
 from backend.crud.crud_target import target_dao
 from backend.database.db_postgres import async_db_session
+from backend.database.db_redis import redis_client
 from backend.utils.timezone import timezone
 from backend.models import Scan
 
@@ -26,7 +29,40 @@ _arq_pool = None
 # In-process fallback honours the same concurrency cap as the arq worker.
 _SLOTS: asyncio.Semaphore | None = None
 # Scans that must not be deleted (directly or with their target) until they end.
-_BUSY = (ScanStatus.awaiting_approval.value, ScanStatus.queued.value, ScanStatus.running.value)
+_BUSY = (ScanStatus.awaiting_approval.value, ScanStatus.awaiting_scope.value, ScanStatus.queued.value, ScanStatus.running.value)
+
+
+# Audit exploit knobs (auth_token / aggression / id_range / allow_destructive) must
+# survive the human awaiting_scope pause WITHOUT being persisted on the scan row
+# (a destructive opt-in must never linger in the DB). We stash them in Redis with a
+# short TTL, keyed by scan id, and pop+delete them when the audit resumes.
+_XOPTS_TTL = 6 * 3600
+
+
+def _xopts_key(scan_id: int) -> str:
+    return f'shasec:scan:{scan_id}:xopts'
+
+
+async def _stash_audit_opts(scan_id: int, auth_token: str | None, options: dict | None) -> None:
+    try:
+        await redis_client.set(
+            _xopts_key(scan_id), json.dumps({'auth_token': auth_token, 'options': options or {}}),
+            ex=_XOPTS_TTL,
+        )
+    except Exception as exc:  # noqa: BLE001 — resume will just use safe defaults
+        log.warning(f'could not stash audit opts for scan {scan_id}: {exc}')
+
+
+async def _pop_audit_opts(scan_id: int) -> tuple[str | None, dict | None]:
+    try:
+        raw = await redis_client.get(_xopts_key(scan_id))
+        await redis_client.delete(_xopts_key(scan_id))
+        if raw:
+            data = json.loads(raw)
+            return data.get('auth_token'), data.get('options')
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f'could not read audit opts for scan {scan_id}: {exc}')
+    return None, None
 
 
 async def _run_limited(scan_id: int, auth_token: str | None, options: dict | None) -> None:
@@ -275,6 +311,7 @@ class ScanService:
         *, actor: Actor, url: str, type: str, name: str | None = None, allow_active_exploitation: bool = False,
         profile: str = 'standard', aggression: str = 'safe',
         auth_token: str | None = None, id_range: str | None = None, allow_destructive: bool = False,
+        mode: str = 'single',
     ) -> Scan:
         """One-shot: from a URL, create-or-reuse the caller's target, create the
         scan, bill it and start it.
@@ -315,6 +352,7 @@ class ScanService:
                     target_id=target.id,
                     allow_active_exploitation=allow_active_exploitation,
                     profile=profile,
+                    mode=mode,
                 ),
                 owner_id=actor.id,
             )
@@ -326,10 +364,54 @@ class ScanService:
         options = {'allow_destructive': bool(allow_destructive), 'aggression': aggression}
         if id_range:
             options['id_range'] = id_range
+        # A domain audit pauses on awaiting_scope after cartography; keep its
+        # exploit knobs in Redis so set_scope can re-pass them to steps 2-4.
+        if mode == 'audit':
+            await _stash_audit_opts(scan_id, auth_token, options)
         await _dispatch(scan_id, auth_token=auth_token, options=options)
 
         async with async_db_session() as db:
             return await scan_dao.get(db, scan_id)
+
+    @staticmethod
+    async def set_scope(*, actor: Actor, pk: int, asset_ids: list[int]) -> Scan:
+        """Pick the in-scope hosts of a domain audit paused on ``awaiting_scope``
+        and resume it (steps 2-4 run only on the selected, live, own hosts).
+
+        Billing already happened when the audit was created, so resuming is free.
+        The audit's exploit knobs (auth_token / aggression / id_range) were
+        stashed in Redis at creation (never on the DB row) and are popped here so
+        steps 2-4 probe with the same settings the operator chose — this is what
+        lets BOLA/BFLA run with the provided token after the scope pause.
+        """
+        async with async_db_session.begin() as db:
+            scan = await scan_dao.get(db, pk)
+            ensure_access(actor, scan, not_found='Scan not found')
+            if scan.status != ScanStatus.awaiting_scope.value:
+                raise errors.ConflictError(msg=f'Scan is not awaiting scope (status={scan.status})')
+            assets = await scan_asset_dao.get_by_scan(db, pk)
+            valid_ids = {a.id for a in assets}
+            chosen = [i for i in asset_ids if i in valid_ids]
+            if not chosen:
+                raise errors.RequestError(msg='Sélectionnez au moins un hôte à auditer.')
+            # Guard: never let a third-party / non-resolving host into scope.
+            blocked = [a for a in assets if a.id in chosen and (a.third_party or not a.alive)]
+            if blocked:
+                raise errors.ForbiddenError(
+                    msg=f'Hôte hors périmètre (tiers ou injoignable) : {blocked[0].host}')
+            await scan_asset_dao.set_selection(db, pk, chosen)
+            await scan_dao.update(db, pk, {'status': ScanStatus.queued.value})
+        auth_token, options = await _pop_audit_opts(pk)
+        await _dispatch(pk, auth_token=auth_token, options=options)
+        async with async_db_session() as db:
+            return await scan_dao.get(db, pk)
+
+    @staticmethod
+    async def assets(*, actor: Actor, pk: int):
+        async with async_db_session() as db:
+            scan = await scan_dao.get(db, pk)
+            ensure_access(actor, scan, not_found='Scan not found')
+            return await scan_asset_dao.get_by_scan(db, pk)
 
     @staticmethod
     async def cancel(*, actor: Actor, pk: int) -> int:
@@ -337,7 +419,7 @@ class ScanService:
             scan = await scan_dao.get(db, pk)
             ensure_access(actor, scan, not_found='Scan not found')
             active = (ScanStatus.pending.value, ScanStatus.awaiting_approval.value,
-                      ScanStatus.queued.value, ScanStatus.running.value)
+                      ScanStatus.awaiting_scope.value, ScanStatus.queued.value, ScanStatus.running.value)
             if scan.status not in active:
                 raise errors.ForbiddenError(msg=f'Scan cannot be cancelled (status={scan.status})')
             refundable = scan.status in (ScanStatus.queued.value, ScanStatus.awaiting_approval.value)

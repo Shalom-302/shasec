@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { BulkBar, RowBox, SelectAllBox, useSelection } from '@/components/bulk';
 import { Empty, ErrorBox, Loading, Pager, PageHeader, StatusBadge, TextLink } from '@/components/ui';
 import { api } from '@/lib/api';
 import { BILLING_LABEL, fmtDate, hostOf, isTerminal, PROFILE_LABEL, STATUS_LABEL } from '@/lib/format';
@@ -18,11 +19,16 @@ export default function ScansPage() {
     [page, status, targetId],
   );
   const [delErr, setDelErr] = useState('');
-  const remove = async (s: Scan) => {
-    if (!confirm(`Supprimer le scan #${s.id}, ses vulnérabilités et ses rapports ? Cette action est définitive.`)) return;
-    setDelErr('');
-    try { await api('/scans', { method: 'DELETE', query: { pk: s.id } }); scans.reload(); }
+  const [deleting, setDeleting] = useState(false);
+  // A running scan holds credits and a worker slot: the API refuses to delete it.
+  const sel = useSelection(scans.data?.items.filter(s => isTerminal(s.status)).map(s => s.id) ?? []);
+  const remove = async (ids: number[]) => {
+    const what = ids.length === 1 ? `le scan #${ids[0]}` : `ces ${ids.length} scans`;
+    if (!confirm(`Supprimer ${what}, leurs vulnérabilités et leurs rapports ? Cette action est définitive.`)) return;
+    setDelErr(''); setDeleting(true);
+    try { await api('/scans', { method: 'DELETE', query: { pk: ids } }); scans.reload(); }
     catch (e: any) { setDelErr(e.message); }
+    finally { setDeleting(false); }
   };
   const host = (id: number) => {
     const t = targets.data?.items.find(x => x.id === id);
@@ -57,13 +63,22 @@ export default function ScansPage() {
         <Empty title={status || targetId ? 'Aucun scan pour ces filtres' : 'Aucun scan pour l’instant'}
           action={!status && !targetId && <Link href="/scans/new" className="btn">Lancer un scan</Link>} />
       )}
-      {scans.data && scans.data.items.length > 0 && (
+      {scans.data && scans.data.items.length > 0 && (<>
+        <BulkBar sel={sel}>
+          <button className="btn-danger" disabled={deleting} onClick={() => remove(sel.ids)}>
+            {deleting ? 'Suppression…' : 'Supprimer la sélection'}
+          </button>
+        </BulkBar>
         <div className="card overflow-x-auto p-0 sm:p-0">
           <table className="table">
-            <thead><tr><th>#</th><th>Application</th><th>Profil</th><th>Facturation</th><th>Statut</th><th>Créé le</th><th /></tr></thead>
+            <thead><tr><th className="w-10"><SelectAllBox sel={sel} disabled={!scans.data.items.some(s => isTerminal(s.status))} /></th><th>#</th><th>Application</th><th>Profil</th><th>Facturation</th><th>Statut</th><th>Créé le</th><th /></tr></thead>
             <tbody>
               {scans.data.items.map(s => (
                 <tr key={s.id}>
+                  <td>
+                    <RowBox sel={sel} id={s.id} label={`Sélectionner le scan #${s.id}`} disabled={!isTerminal(s.status)}
+                      title={isTerminal(s.status) ? undefined : 'Scan en cours : annulez-le avant de le supprimer'} />
+                  </td>
                   <td className="text-kx-muted">{s.id}</td>
                   <td className="font-medium">{host(s.target_id)}</td>
                   <td>{PROFILE_LABEL[s.profile]?.name || s.profile}</td>
@@ -75,7 +90,7 @@ export default function ScansPage() {
                   <td className="whitespace-nowrap text-right">
                     <TextLink href={`/scans/${s.id}`}>Détail</TextLink>
                     {isTerminal(s.status) && (
-                      <button className="ml-3 text-sm text-red-700 hover:underline" onClick={() => remove(s)}>Supprimer</button>
+                      <button className="ml-3 text-sm text-red-700 hover:underline" onClick={() => remove([s.id])}>Supprimer</button>
                     )}
                   </td>
                 </tr>
@@ -83,7 +98,7 @@ export default function ScansPage() {
             </tbody>
           </table>
         </div>
-      )}
+      </>)}
       {scans.data && <Pager page={page} totalPages={scans.data.total_pages} onPage={setPage} />}
     </>
   );
