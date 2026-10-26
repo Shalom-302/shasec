@@ -14,5 +14,6 @@ locale = {
   "http_500": "Erreur interne du serveur",
   "http_502": "Erreur de passerelle",
   "http_503": "Service indisponible",
-  "http_504": "Délai d'attente de la passerelle dépassé"
+  "http_504": "Délai d'attente de la passerelle dépassé",
+  "too_many_attempts": "Trop de tentatives. Réessayez dans {minutes} min."
 }

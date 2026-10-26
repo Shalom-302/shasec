@@ -1,3 +1,5 @@
+from math import ceil
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -16,6 +18,7 @@ from backend.common.schema import (
 from backend.core.conf import settings
 from backend.utils.serializers import MsgSpecJSONResponse
 from backend.utils.trace_id import get_request_trace_id
+from backend.utils.translator import Translator
 
 
 def _get_exception_code(status_code: int):
@@ -98,6 +101,14 @@ def register_exception(app: FastAPI):
             content = {
                 'code': exc.status_code,
                 'msg': exc.detail,
+                'data': None,
+            }
+        elif exc.status_code == 429:
+            # Rate limits are expected user-facing errors: say so, and when to retry.
+            retry_after = int((exc.headers or {}).get('Retry-After', 60))
+            content = {
+                'code': 429,
+                'msg': Translator(getattr(request.state, 'locale', 'fr')).t('app.too_many_attempts', minutes=max(1, ceil(retry_after / 60))),
                 'data': None,
             }
         else:
