@@ -55,6 +55,14 @@ services:
       # only; never a public port). Empty => the chat feature is simply off.
       - HERMES_URL=${HERMES_URL:-}
       - HERMES_TOKEN=${HERMES_TOKEN:-}
+      # WhatsApp OTP at sign-up (gowa). OTP_ENABLED=true turns the gate on.
+      - OTP_ENABLED=${OTP_ENABLED:-false}
+      - GOWA_URL=${GOWA_URL:-}
+      - GOWA_BASIC_USER=${GOWA_BASIC_USER:-}
+      - GOWA_BASIC_PASS=${GOWA_BASIC_PASS:-}
+      # Password-protected private Swagger (see FASTAPI_PRIVATE_DOCS_PATH).
+      - DOCS_BASIC_USER=${DOCS_BASIC_USER:-}
+      - DOCS_BASIC_PASSWORD=${DOCS_BASIC_PASSWORD:-}
     # Dokploy/Traefik routes the public domain to this container port.
     expose:
       - "8000"
