@@ -23,6 +23,7 @@ services:
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
       # Durable scans: enqueue to the arq worker (below) instead of in-process.
       - SHASEC_USE_ARQ=true
+      - HERMES_URL=http://host.docker.internal:8899/chat
     # Dev: bind-mount the source so edits hot-reload (uvicorn --reload). The venv
     # lives at /opt/venv (outside /app) so it is not shadowed by this mount.
     volumes:

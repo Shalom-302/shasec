@@ -41,7 +41,7 @@ export type Target = {
   updated_time?: string | null;
 };
 
-export type ScanStatus = 'pending' | 'awaiting_approval' | 'queued' | 'running' | 'completed' | 'failed';
+export type ScanStatus = 'pending' | 'awaiting_approval' | 'awaiting_scope' | 'queued' | 'running' | 'completed' | 'failed';
 export type ScanProfile = 'fast' | 'standard' | 'deep';
 export type ScanBilling = 'free' | 'credits' | 'admin';
 
@@ -51,6 +51,7 @@ export type Scan = {
   target_id: number;
   status: ScanStatus;
   profile: ScanProfile;
+  mode?: 'single' | 'audit';
   allow_active_exploitation: boolean;
   owner_id?: number | null;
   billing: ScanBilling;
@@ -80,7 +81,26 @@ export type Finding = {
   evidence?: string | null;
   recommendation?: string | null;
   fingerprint?: string | null;
+  asset_id?: number | null;
+  owasp?: string | null;
   created_time: string;
+};
+
+export type ScanAsset = {
+  id: number;
+  scan_id: number;
+  host: string;
+  source: string;
+  url?: string | null;
+  ips?: string | null;
+  cname?: string | null;
+  third_party?: string | null;
+  alive: boolean;
+  http_status?: number | null;
+  title?: string | null;
+  server?: string | null;
+  kind: 'website' | 'api';
+  selected: boolean;
 };
 
 export type AIAnalysis = {
@@ -216,4 +236,25 @@ export type AdminAudit = {
   action: string;
   note?: string | null;
   created_time: string;
+};
+
+export type AdminOverview = {
+  users_total: number;
+  users_new_7d: number;
+  users_suspended: number;
+  scans_today: number;
+  scans_running: number;
+  pending_requests: number;
+  credits_outstanding: number;
+  credits_granted_30d: number;
+  vouchers_active: number;
+  recent_users: { id: number; email: string; join_time: string | null }[];
+  recent_actions: {
+    id: number;
+    action: string;
+    note: string | null;
+    target_user_id: number | null;
+    target_email: string | null;
+    created_time: string;
+  }[];
 };

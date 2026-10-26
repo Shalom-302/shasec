@@ -7,20 +7,25 @@ export class ApiError extends Error {
   }
 }
 
-type Opts = { method?: string; body?: unknown; query?: Record<string, string | number | undefined | null> };
+type QueryValue = string | number | undefined | null;
+type Opts = { method?: string; body?: unknown; query?: Record<string, QueryValue | QueryValue[]> };
 
 function qs(query?: Opts['query']) {
   if (!query) return '';
   const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+  // Arrays repeat the key (?pk=1&pk=2), which is how FastAPI reads list params.
+  for (const [k, raw] of Object.entries(query)) {
+    for (const v of Array.isArray(raw) ? raw : [raw]) if (v !== undefined && v !== null && v !== '') p.append(k, String(v));
+  }
   const s = p.toString();
   return s ? `?${s}` : '';
 }
 
 function onExpired() {
   if (typeof window === 'undefined') return;
-  const next = encodeURIComponent(window.location.pathname + window.location.search);
-  window.location.href = `/login?expired=1&next=${next}`;
+  const { pathname, search } = window.location;
+  const login = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+  window.location.href = `${login}?expired=1&next=${encodeURIComponent(pathname + search)}`;
 }
 
 export async function api<T>(path: string, opts: Opts = {}): Promise<T> {

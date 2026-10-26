@@ -39,6 +39,12 @@ class Finding(Base):
     description: Mapped[str | None] = mapped_column(sa.Text, default=None)
     evidence: Mapped[str | None] = mapped_column(sa.Text, default=None)
     recommendation: Mapped[str | None] = mapped_column(sa.Text, default=None)
+    # Domain audits: the discovered host this result belongs to (None = the target itself).
+    asset_id: Mapped[int | None] = mapped_column(
+        sa.ForeignKey('scan_asset.id', ondelete='SET NULL'), index=True, default=None
+    )
+    # OWASP Top 10 (2021) class, e.g. "A01" — see backend/app/shasec/owasp.py.
+    owasp: Mapped[str | None] = mapped_column(sa.String(8), default=None, index=True)
     # Deterministic, scanner-agnostic correlation key. Two plugins reporting the
     # same vulnerability share a fingerprint, so the aggregator can dedupe them
     # into a single finding (criticality = max). Computed by the aggregator.

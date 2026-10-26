@@ -6,7 +6,8 @@ from fastapi import APIRouter, Path, Query, Request, Response, WebSocket
 from backend.app.shasec.schema.ai_analysis import GetAIAnalysisDetails
 from backend.app.shasec.schema.finding import GetFindingDetails
 from backend.app.shasec.schema.report import GetReportDetails
-from backend.app.shasec.schema.scan import AdvancedScanParam, CreateScanParam, GetScanDetails, QuickScanParam, ReviewParam
+from backend.app.shasec.schema.scan import AdvancedScanParam, AuditScanParam, CreateScanParam, GetScanDetails, QuickScanParam, ReviewParam
+from backend.app.shasec.schema.scan_asset import GetScanAssetDetails, SelectAssetsParam
 from backend.app.shasec.service.finding_service import finding_service
 from backend.app.shasec.service.progress import channel as progress_channel
 from backend.app.shasec.service.progress import describe as progress_describe
@@ -91,6 +92,35 @@ async def quick_scan(request: Request, obj: QuickScanParam) -> ResponseModel:
     )
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)
+
+
+@router.post('/audit', summary='Start a whole-domain audit (5-step hunt) — admin/operator',
+             dependencies=[DependsJwtAuth])
+async def start_domain_audit(request: Request, obj: AuditScanParam) -> ResponseModel:
+    actor = actor_from(request)
+    require_admin(actor)
+    scan = await scan_service.quick(
+        actor=actor, url=obj.url, type=obj.type, name=obj.name, mode='audit',
+        allow_active_exploitation=obj.allow_active_exploitation, profile=obj.profile,
+        aggression=obj.aggression, auth_token=obj.auth_token, id_range=obj.id_range,
+        allow_destructive=obj.allow_destructive,
+    )
+    return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
+
+
+@router.get('/{pk}/assets', summary='Discovered hosts of a domain audit (cartography)',
+            dependencies=[DependsJwtAuth])
+async def get_scan_assets(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    assets = await scan_service.assets(actor=actor_from(request), pk=pk)
+    data = [GetScanAssetDetails.model_validate(a) for a in assets]
+    return response_base.success(request=request, data=data)
+
+
+@router.post('/{pk}/scope', summary='Select in-scope hosts and resume a domain audit',
+             dependencies=[DependsJwtAuth])
+async def set_scan_scope(request: Request, pk: Annotated[int, Path(...)], obj: SelectAssetsParam) -> ResponseModel:
+    scan = await scan_service.set_scope(actor=actor_from(request), pk=pk, asset_ids=obj.asset_ids)
+    return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
 
 
 @router.post('/advanced', summary='Request an advanced (active) audit — needs admin approval',

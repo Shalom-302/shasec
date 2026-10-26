@@ -4,7 +4,7 @@ from typing import List
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from backend.common.enums import ScanBilling, ScanProfile, ScanStatus
+from backend.common.enums import ScanBilling, ScanMode, ScanProfile, ScanStatus
 from backend.common.model import Base, get_id, id_key
 
 
@@ -24,12 +24,16 @@ class Scan(Base):
         sa.ForeignKey('target.id', ondelete='CASCADE'), index=True, comment='Audited target'
     )
     status: Mapped[str] = mapped_column(
-        sa.String(32), default=ScanStatus.pending.value, comment='pending / awaiting_approval / queued / running / completed / failed'
+        sa.String(32), default=ScanStatus.pending.value, comment='pending / awaiting_approval / awaiting_scope / queued / running / completed / failed'
     )
     # Depth/speed profile (methodology §3 staged hunt). Controls which plugin
     # tiers run and the scanner-stage wall-clock budget.
     profile: Mapped[str] = mapped_column(
         sa.String(16), default=ScanProfile.standard.value, comment='fast / standard / deep'
+    )
+    # single URL, or a whole-domain audit run in the five-step hunt (ScanMode).
+    mode: Mapped[str] = mapped_column(
+        sa.String(16), default=ScanMode.single.value, server_default=ScanMode.single.value, comment='single / audit'
     )
     # Explicit consent to run the active-exploitation stage (sends attack
     # payloads, not just reads). OFF by default — scanning never implies it.

@@ -17,9 +17,12 @@ const NAV = [
   { href: '/settings', label: 'Compte', icon: IconUser },
 ];
 const ADMIN_NAV = [
+  { href: '/admin', label: 'Tableau de bord admin', icon: IconHome },
+  { href: '/admin/audit', label: 'Audit de domaine', icon: IconRadar },
+  { href: '/admin/hermes', label: 'Hermes (assistant)', icon: IconTerminal },
   { href: '/admin/requests', label: 'Demandes d’audit', icon: IconShield },
   { href: '/admin/users', label: 'Utilisateurs', icon: IconUser },
-  { href: '/admin', label: 'Administration', icon: IconShield },
+  { href: '/admin/credits', label: 'Crédits & codes', icon: IconCoins },
   { href: '/operator', label: 'Console opérateur', icon: IconTerminal },
 ];
 
@@ -50,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await authCall('logout').catch(() => null);
-    window.location.href = '/login';
+    window.location.href = path.startsWith('/admin') ? '/admin/login' : '/login';
   };
 
   const link = (i: (typeof NAV)[number]) => {

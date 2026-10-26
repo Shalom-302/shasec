@@ -16,6 +16,7 @@ export function hostOf(url: string) {
 export const STATUS_LABEL: Record<ScanStatus, string> = {
   pending: 'En attente',
   awaiting_approval: 'En attente de validation',
+  awaiting_scope: 'Sélection du périmètre',
   queued: 'En file d’attente',
   running: 'En cours',
   completed: 'Terminé',

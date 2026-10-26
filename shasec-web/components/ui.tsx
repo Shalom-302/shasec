@@ -69,6 +69,7 @@ export function SeverityBadge({ severity }: { severity?: string | null }) {
 const STATUS_CLS: Record<ScanStatus, string> = {
   pending: 'bg-kx-panel2 text-kx-muted',
   awaiting_approval: 'bg-indigo-50 text-indigo-700',
+  awaiting_scope: 'bg-indigo-50 text-indigo-700',
   queued: 'bg-amber-50 text-amber-800',
   running: 'bg-black text-white',
   completed: 'bg-kx-tealSoft text-teal-900',

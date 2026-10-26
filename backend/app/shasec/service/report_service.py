@@ -13,10 +13,11 @@ from datetime import datetime
 
 import jinja2
 
+from backend.app.shasec.owasp import label as owasp_label
 from backend.app.shasec.schema.report import CreateReportParam
 from backend.app.shasec.service.ai_service import ai_service
 from backend.common.cloud_storage.cloud_storage import MinioStorage
-from backend.common.enums import ReportFormat
+from backend.common.enums import FindingStatus, ReportFormat
 from backend.common.exception import errors
 from backend.common.log import log
 from backend.core.conf import settings
@@ -114,12 +115,12 @@ _HTML_TEMPLATE = jinja2.Template(
   </div>
  {% endif %}
 
- <h2>Findings ({{ findings|length }})</h2>
- {% if findings %}<table><thead><tr><th>Sév.</th><th>Titre</th><th>Scanner</th><th>Description</th></tr></thead><tbody>
- {% for f in findings %}<tr><td><span class="sev {{ f.severity }}">{{ f.severity }}</span></td>
-   <td><b>{{ f.title }}</b></td><td class="tag">{{ f.plugin }}</td>
+ {% if confirmed_findings %}<h2>Vulnérabilités confirmées ({{ confirmed_findings|length }})</h2>
+ <table><thead><tr><th>Sév.</th><th>OWASP</th><th>Titre</th><th>Scanner</th><th>Description</th></tr></thead><tbody>
+ {% for f in confirmed_findings %}<tr><td><span class="sev {{ f.severity }}">{{ f.severity }}</span></td>
+   <td class="tag">{{ f.owasp_label }}</td><td><b>{{ f.title }}</b></td><td class="tag">{{ f.plugin }}</td>
    <td>{{ f.description or '' }}{% if f.evidence %}<div class="tag">{{ f.evidence }}</div>{% endif %}</td></tr>
- {% endfor %}</tbody></table>{% else %}<p class="ok">Aucun finding.</p>{% endif %}
+ {% endfor %}</tbody></table>{% endif %}
 
  <h2>Preuves d'exploitation ({{ exploits|length }})</h2>
  {% if exploits %}{% for e in exploits %}
@@ -132,6 +133,14 @@ _HTML_TEMPLATE = jinja2.Template(
    {% if e.response %}<div class="proof">{{ e.response }}</div>{% endif %}
   </div>
  {% endfor %}{% else %}<p class="ok">Aucune preuve d'exploitation — la cible résiste aux modules exécutés.</p>{% endif %}
+
+ {% if suspected_findings %}<h2>Annexe — observations à vérifier ({{ suspected_findings|length }})</h2>
+ <p class="tag">Signaux relevés par les scanners, non prouvés par exploitation. À confirmer manuellement — ce ne sont pas des vulnérabilités avérées.</p>
+ <table><thead><tr><th>Sév.</th><th>OWASP</th><th>Observation</th><th>Scanner</th></tr></thead><tbody>
+ {% for f in suspected_findings %}<tr><td><span class="sev {{ f.severity }}">{{ f.severity }}</span></td>
+   <td class="tag">{{ f.owasp_label }}</td><td>{{ f.title }}{% if f.evidence %}<div class="tag">{{ f.evidence }}</div>{% endif %}</td>
+   <td class="tag">{{ f.plugin }}</td></tr>
+ {% endfor %}</tbody></table>{% endif %}
 
 </body></html>"""
 )
@@ -149,10 +158,11 @@ def _render_markdown(ctx: dict) -> str:
         '## Résumé exécutif',
         ctx['summary'],
         '',
-        f"## Findings ({len(ctx['findings'])})",
+        f"## Vulnérabilités confirmées ({len(ctx['confirmed_findings'])})",
     ]
-    for f in ctx['findings']:
-        lines.append(f"- **[{f.severity.upper()}]** {f.title} _({f.plugin})_ — {f.description or ''}")
+    for f in ctx['confirmed_findings']:
+        tag = f"{f.owasp_label} · " if getattr(f, 'owasp_label', '') else ''
+        lines.append(f"- **[{f.severity.upper()}]** {tag}{f.title} _({f.plugin})_ — {f.description or ''}")
     lines += ['', f"## Preuves d'exploitation ({len(ctx['exploits'])})"]
     if not ctx['exploits']:
         lines.append('_Aucune preuve — la cible résiste aux modules exécutés._')
@@ -164,6 +174,12 @@ def _render_markdown(ctx: dict) -> str:
             f"{e.impact or ''}",
             '```http', (e.request or '').strip(), (e.response or '').strip(), '```', '',
         ]
+    if ctx['suspected_findings']:
+        lines += ['', f"## Annexe — observations à vérifier ({len(ctx['suspected_findings'])})",
+                  '_Signaux non prouvés, à confirmer manuellement._', '']
+        for f in ctx['suspected_findings']:
+            tag = f"{f.owasp_label} · " if getattr(f, 'owasp_label', '') else ''
+            lines.append(f"- [{f.severity.upper()}] {tag}{f.title} _({f.plugin})_")
     return '\n'.join(lines)
 
 
@@ -205,6 +221,10 @@ class ReportService:
         if fmt not in {f.value for f in ReportFormat}:
             raise errors.RequestError(msg=f'Unsupported report format: {format}')
 
+        # Deferred AI: the analysis runs once, here, when a report is first asked
+        # for — not on every scan — so AI cost is one call per audit. Idempotent.
+        await ai_service.analyze_scan(scan_id)
+
         async with async_db_session() as db:
             scan = await scan_dao.get(db, scan_id)
             if not scan:
@@ -229,8 +249,20 @@ class ReportService:
         summary = (analysis.summary if analysis and analysis.summary
                    else _auto_summary(target, findings, exploits, confirmed_count))
 
+        # Body vs annex (methodology §14): the report body carries what is PROVEN
+        # — confirmed exploit proofs and any finding promoted to 'confirmed'. The
+        # rest (scanner observations still 'suspected') go to a separate
+        # "À vérifier" annex, so a reader never mistakes a lead for a vulnerability.
+        confirmed_findings = [f for f in findings if f.status == FindingStatus.confirmed.value]
+        suspected_findings = [f for f in findings if f.status != FindingStatus.confirmed.value]
+        for f in findings:
+            f.owasp_label = owasp_label(getattr(f, 'owasp', None))
+        for e in exploits:
+            e.owasp_label = owasp_label(getattr(e, 'owasp', None))
+
         ctx = {
             'scan': scan, 'target': target, 'findings': findings, 'exploits': exploits,
+            'confirmed_findings': confirmed_findings, 'suspected_findings': suspected_findings,
             'analysis': analysis, 'counts': counts, 'sev_order': _SEV_ORDER,
             'confirmed_count': confirmed_count, 'score': score, 'summary': summary,
             'generated_at': scan.completed_at.strftime('%Y-%m-%d %H:%M UTC') if scan.completed_at else '',
@@ -275,6 +307,7 @@ def _serialize(fmt: str, ctx: dict) -> tuple[bytes, str, str]:
             'scan_id': ctx['scan'].id, 'score': ctx['score'], 'summary': ctx['summary'],
             'findings': [
                 {'severity': f.severity, 'title': f.title, 'plugin': f.plugin,
+                 'status': f.status, 'owasp': getattr(f, 'owasp', None),
                  'description': f.description, 'evidence': f.evidence} for f in ctx['findings']
             ],
             'exploits': [

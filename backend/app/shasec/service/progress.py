@@ -23,24 +23,24 @@ _STEPS_MAX = 300            # cap the list so a chatty scan can't grow unbounded
 # per-plugin completion (computed in ``describe``).
 PHASES = [
     'Initialisation',
+    'Cartographie',
     'Reconnaissance & scan',
-    'Corrélation des résultats',
     'Validation contrôlée',
-    'Analyse IA',
     'Terminé',
 ]
 _EVENT_PHASE = {
     'awaiting_approval': ('En attente de validation', 0),
     'queued': ("File d'attente", 0),
     'started': ('Initialisation', 5),
-    'scanners.start': ('Reconnaissance & scan', 10),
+    'cartography.start': ('Cartographie', 10),
+    'cartography.done': ('Cartographie', 25),
+    'awaiting_scope': ('Sélection du périmètre', 25),
+    'scanners.start': ('Reconnaissance & scan', 30),
     'plugin.start': ('Reconnaissance & scan', None),   # percent from counts
     'plugin.done': ('Reconnaissance & scan', None),    # percent from counts
-    'scanners.done': ('Corrélation des résultats', 70),
-    'exploit.start': ('Validation contrôlée', 74),
-    'exploit.done': ('Validation contrôlée', 82),
-    'ai.start': ('Analyse IA', 86),
-    'ai.done': ('Analyse IA', 95),
+    'scanners.done': ('Validation contrôlée', 72),
+    'exploit.start': ('Validation contrôlée', 78),
+    'exploit.done': ('Validation contrôlée', 90),
     'completed': ('Terminé', 100),
     'failed': ('Échec', None),
 }
@@ -116,6 +116,8 @@ def describe(events: list[dict], db_status: str | None = None) -> dict:
             status = 'awaiting_approval'
         elif name == 'queued':
             status = 'queued'
+        elif name == 'awaiting_scope':
+            status = 'awaiting_scope'
         elif name == 'started':
             status = 'running'
         elif name == 'scanners.start':
@@ -149,7 +151,7 @@ def describe(events: list[dict], db_status: str | None = None) -> dict:
         if phase:
             current_phase = phase
         if name in ('plugin.start', 'plugin.done') and total:
-            percent = max(percent, 10 + int(60 * min(done, total) / total))
+            percent = max(percent, 30 + int(42 * min(done, total) / total))
         elif pct is not None:
             percent = max(percent, pct)
 

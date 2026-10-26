@@ -51,6 +51,10 @@ services:
       - ZAP_ENDPOINT=http://zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
       - ZAP_ACTIVE_SCAN=${ZAP_ACTIVE_SCAN:-false}
+      # Hermes assistant — the backend relays /hermes/chat here (internal network
+      # only; never a public port). Empty => the chat feature is simply off.
+      - HERMES_URL=${HERMES_URL:-}
+      - HERMES_TOKEN=${HERMES_TOKEN:-}
     # Dokploy/Traefik routes the public domain to this container port.
     expose:
       - "8000"
@@ -66,6 +70,8 @@ services:
     networks:
       shasec:
         aliases: [shasec-api]
+      # Shared bridge with the Hermes stack so the API can reach http://hermes-http:8700.
+      hermes-link: {}
 
   # Kortex Security web console (Next.js, shasec-web/). Talks to the API over the
   # internal `shasec` network only — the browser never reaches the API directly.
@@ -186,3 +192,8 @@ volumes:
 
 networks:
   shasec:
+  # The Hermes containers live in another compose project; join their network so
+  # the API resolves `hermes-http`. Create it once on the VPS, then reference it
+  # from BOTH stacks:  docker network create hermes-link
+  hermes-link:
+    external: true

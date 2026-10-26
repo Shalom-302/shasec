@@ -7,7 +7,7 @@ import type { Progress, Scan } from '@/lib/types';
 import { IconCheck } from './icons';
 
 // Macro-phases as emitted by the pipeline (backend/app/shasec/service/progress.py).
-const PHASES = ['Initialisation', 'Reconnaissance & scan', 'Corrélation des résultats', 'Validation contrôlée', 'Analyse IA', 'Terminé'];
+const PHASES = ['Initialisation', 'Cartographie', 'Reconnaissance & scan', 'Validation contrôlée', 'Terminé'];
 
 export function ScanProgress({ scan, progress, status }: { scan: Scan; progress: Progress | null; status?: string }) {
   const [now, setNow] = useState(Date.now());
@@ -35,6 +35,12 @@ export function ScanProgress({ scan, progress, status }: { scan: Scan; progress:
           <p className="mt-1">Votre demande d’audit avancé (tests actifs) a été transmise à un administrateur. Vous serez notifié dès qu’elle est validée, et le scan démarrera automatiquement. Les crédits sont réservés et restitués en cas de refus.</p>
         </div>
       )}
+      {status === 'awaiting_scope' && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+          <p className="font-semibold">Cartographie terminée — sélectionnez le périmètre</p>
+          <p className="mt-1">Les hôtes découverts sont listés plus bas. Cochez ceux à auditer puis lancez les étapes suivantes.</p>
+        </div>
+      )}
       {status === 'queued' && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">
@@ -59,10 +65,10 @@ export function ScanProgress({ scan, progress, status }: { scan: Scan; progress:
       </div>
 
       {/* Phase stepper */}
-      <ol className="grid grid-cols-3 gap-2 sm:grid-cols-6" aria-label="Phases du scan">
+      <ol className="grid grid-cols-5 gap-2" aria-label="Phases du scan">
         {PHASES.map((p, i) => {
           const done = !failed && (status === 'completed' || i < phaseIdx);
-          const current = !failed && status !== 'completed' && status !== 'queued' && i === phaseIdx;
+          const current = !failed && status !== 'completed' && status !== 'queued' && status !== 'awaiting_scope' && i === phaseIdx;
           return (
             <li key={p} className="text-center">
               <span className={`mx-auto mb-1.5 grid h-7 w-7 place-items-center rounded-full text-xs font-bold ${

@@ -165,10 +165,27 @@ awaiting_approval (advanced/active audit, credits reserved) -> queued
 
     pending = "pending"
     awaiting_approval = "awaiting_approval"
+    # Domain audit: cartography done, waiting for the operator to pick which
+    # discovered hosts are in scope for the active phases.
+    awaiting_scope = "awaiting_scope"
     queued = "queued"
     running = "running"
     completed = "completed"
     failed = "failed"
+
+
+class ScanMode(StrEnum):
+    """What a scan covers.
+
+    - ``single`` : one URL, every stage in one pass (the historical behaviour).
+    - ``audit``  : a whole domain, in the five-step hunt — 1 cartography
+      (subdomains, live hosts, stack), then a human scope gate, then per selected
+      host 2 passive+active scanning, 3 anonymous access, 4 controlled
+      validation (proofs), and 5 the report, generated on demand only.
+    """
+
+    single = "single"
+    audit = "audit"
 
 
 class ExploitAggression(StrEnum):
