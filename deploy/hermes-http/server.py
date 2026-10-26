@@ -76,18 +76,42 @@ def _invoke(message: str, session: str, resume: bool):
     return subprocess.run(cmd, env=_env(), cwd=HERMES_HOME, capture_output=True, text=True, timeout=RUN_TIMEOUT)
 
 
+_SEEN_FILE = os.path.join(HERMES_HOME, '.adapter_sessions')
+
+
+def _seen(session: str) -> bool:
+    try:
+        with open(_SEEN_FILE, encoding='utf-8') as fh:
+            return session in {ln.strip() for ln in fh}
+    except OSError:
+        return False
+
+
+def _mark_seen(session: str) -> None:
+    try:
+        with open(_SEEN_FILE, 'a', encoding='utf-8') as fh:
+            fh.write(session + '\n')
+    except OSError:
+        pass
+
+
 def _run_hermes(message: str, session: str) -> tuple[bool, str]:
     session = _SAFE_SESSION.sub('-', session)[:64] or 'default'
     _ensure_profile(session)
+    # First message of a web conversation -> start a NEW Hermes session (so the
+    # default profile's credentials are used, and no old/stuck context leaks in).
+    # Later messages of the same conversation -> --continue that session.
+    first = not _seen(session)
     try:
-        proc = _invoke(message, session, resume=True)
+        proc = _invoke(message, session, resume=not first)
         combined = f'{proc.stdout or ""}\n{proc.stderr or ""}'.lower()
-        # First message of a chat: no session to continue yet -> start a fresh one.
         if proc.returncode != 0 and ('no session' in combined or 'no previous' in combined
                                      or 'no matching session' in combined):
             proc = _invoke(message, session, resume=False)
     except subprocess.TimeoutExpired:
         return False, f"Hermes a dépassé le délai de {RUN_TIMEOUT}s."
+    if proc.returncode == 0:
+        _mark_seen(session)
     out = _NOISE.sub('', _ANSI.sub('', proc.stdout or '')).strip()
     if not out:
         err = _NOISE.sub('', _ANSI.sub('', proc.stderr or '')).strip()
