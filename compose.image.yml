@@ -70,8 +70,10 @@ services:
     networks:
       shasec:
         aliases: [shasec-api]
-      # Shared bridge with the Hermes stack so the API can reach http://hermes-http:8700.
-      hermes-link: {}
+      # Shared bridge with the Hermes stack: the API reaches http://hermes-http:8700,
+      # and Hermes reaches the API at http://shasec-api:8000 (stable alias here too).
+      hermes-link:
+        aliases: [shasec-api]
 
   # Kortex Security web console (Next.js, shasec-web/). Talks to the API over the
   # internal `shasec` network only — the browser never reaches the API directly.

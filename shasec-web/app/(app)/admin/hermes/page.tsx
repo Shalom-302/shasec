@@ -13,13 +13,49 @@ const SUGGESTIONS = [
   'Montre-moi les findings du dernier scan',
 ];
 
+const LS_MSGS = 'hermes_chat_messages';
+const LS_SESSION = 'hermes_chat_session';
+
+function newSessionId() {
+  return `admin-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function HermesChat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const sessionId = useRef<string>(`admin-${Date.now().toString(36)}`);
+  const [loaded, setLoaded] = useState(false);
+  const sessionId = useRef<string>('');
   const endRef = useRef<HTMLDivElement>(null);
+
+  // Restore the transcript + session after mount (localStorage is client-only, so
+  // reading it here avoids a hydration mismatch). The session id is kept too, so
+  // Hermes continues the SAME conversation after a refresh, not a blank one.
+  useEffect(() => {
+    try {
+      const rawMsgs = localStorage.getItem(LS_MSGS);
+      if (rawMsgs) setMessages(JSON.parse(rawMsgs));
+      sessionId.current = localStorage.getItem(LS_SESSION) || newSessionId();
+    } catch { sessionId.current = newSessionId(); }
+    if (!sessionId.current) sessionId.current = newSessionId();
+    try { localStorage.setItem(LS_SESSION, sessionId.current); } catch { /* ignore */ }
+    setLoaded(true);
+  }, []);
+
+  // Persist the transcript whenever it changes (per-browser; survives refresh).
+  useEffect(() => {
+    if (!loaded) return;
+    try { localStorage.setItem(LS_MSGS, JSON.stringify(messages.slice(-200))); } catch { /* quota/private mode */ }
+  }, [messages, loaded]);
+
+  const reset = () => {
+    if (messages.length && !confirm('Démarrer une nouvelle conversation ? L’historique affiché sera effacé.')) return;
+    sessionId.current = newSessionId();
+    setMessages([]);
+    setErr('');
+    try { localStorage.setItem(LS_SESSION, sessionId.current); localStorage.removeItem(LS_MSGS); } catch { /* ignore */ }
+  };
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
 
@@ -50,6 +86,13 @@ function HermesChat() {
 
   return (
     <div className="flex h-[calc(100vh-13rem)] min-h-[420px] flex-col">
+      {messages.length > 0 && (
+        <div className="mb-2 flex justify-end">
+          <button onClick={reset} className="text-sm text-kx-muted hover:text-black hover:underline">
+            Nouvelle conversation
+          </button>
+        </div>
+      )}
       <div className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-kx-border bg-white p-4 sm:p-6">
         {messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center text-center">
