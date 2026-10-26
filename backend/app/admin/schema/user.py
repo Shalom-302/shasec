@@ -6,6 +6,7 @@ from typing_extensions import Self
 from backend.common.enums import StatusType
 from backend.common.schema import SchemaBase
 from backend.app.admin.schema.role import GetRoleListDetails
+from backend.core.conf import settings
 
 
 
@@ -49,7 +50,15 @@ class UserRegister(SchemaBase):
     def _phone_digits(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        digits = ''.join(ch for ch in v if ch.isdigit())
+        raw = v.strip()
+        digits = ''.join(ch for ch in raw if ch.isdigit())
+        # "00<cc>..." international prefix -> "<cc>...".
+        if not raw.startswith('+') and digits.startswith('00'):
+            digits = digits[2:]
+        # Local number typed without the country code (e.g. CI "07 88 01 62 04"):
+        # prepend the default code. Ivorian numbers keep their leading 0.
+        elif not raw.startswith('+') and digits.startswith('0'):
+            digits = settings.PHONE_DEFAULT_COUNTRY_CODE + digits
         if not (8 <= len(digits) <= 15):
             raise ValueError('Numéro de téléphone invalide (indicatif + numéro, chiffres uniquement).')
         return digits

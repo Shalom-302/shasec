@@ -47,7 +47,11 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
     } catch (e: any) {
       // Login of an unverified account -> route to the code screen.
       if (e?.data?.otp_required) { setOtpEmail(e.data.email || email); setBusy(false); return; }
-      setErr(e.status === 429 ? 'Trop de tentatives. Patientez une minute puis réessayez.' : e.message);
+      setErr(e.status === 429
+        ? (isRegister
+          ? 'Trop d’inscriptions depuis cette connexion. Réessayez dans une heure.'
+          : 'Trop de tentatives. Patientez une minute puis réessayez.')
+        : e.message);
       setBusy(false);
     }
   };
@@ -80,7 +84,7 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
           <label className="label" htmlFor="phone">Numéro WhatsApp</label>
           <input id="phone" className="input" type="tel" autoComplete="tel" required value={phone}
             onChange={e => setPhone(e.target.value)} placeholder="225 01 52 31 11 24" />
-          <p className="hint">Avec l’indicatif pays. Vous recevrez un code de vérification par WhatsApp.</p>
+          <p className="hint">Ex. 07 88 01 62 04 (Côte d’Ivoire) ou +33 6… pour l’étranger. Vous recevrez un code par WhatsApp.</p>
         </div>
       )}
       <div>
