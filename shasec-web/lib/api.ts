@@ -50,12 +50,37 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
   return (json?.data ?? null) as T;
 }
 
-/** Auth calls go to dedicated routes that set/clear the session cookies. */
-export async function authCall(mode: 'login' | 'register' | 'logout', body?: { email: string; password: string }) {
+/** Auth calls go to dedicated routes that set/clear the session cookies.
+ * Returns the parsed body so callers can detect `otp_required` on sign-up. */
+export async function authCall(
+  mode: 'login' | 'register' | 'logout',
+  body?: { email: string; password: string; phone?: string },
+): Promise<any> {
   const res = await fetch(`/api/auth/${mode}`, {
     method: 'POST',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+  });
+  const json: any = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`, json ?? null);
+  return json;
+}
+
+/** Verify the WhatsApp sign-up code; on success the session cookie is set. */
+export async function verifyOtp(email: string, code: string): Promise<void> {
+  const res = await fetch('/api/auth/verify-otp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  });
+  const json: any = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`);
+}
+
+/** Ask for a new WhatsApp code. */
+export async function resendOtp(email: string): Promise<void> {
+  const res = await fetch('/api/auth/resend-otp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
   });
   const json: any = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`);

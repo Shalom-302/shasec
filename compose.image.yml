@@ -74,6 +74,9 @@ services:
       # and Hermes reaches the API at http://shasec-api:8000 (stable alias here too).
       hermes-link:
         aliases: [shasec-api]
+      # WhatsApp gateway (gowa) network, so the API can send sign-up OTPs via
+      # http://shalom-gowa:3080. Create once on the VPS if missing.
+      whatsapp-shared-network: {}
 
   # Kortex Security web console (Next.js, shasec-web/). Talks to the API over the
   # internal `shasec` network only — the browser never reaches the API directly.
@@ -198,4 +201,6 @@ networks:
   # the API resolves `hermes-http`. Create it once on the VPS, then reference it
   # from BOTH stacks:  docker network create hermes-link
   hermes-link:
+    external: true
+  whatsapp-shared-network:
     external: true

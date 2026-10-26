@@ -1,7 +1,8 @@
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Request, Response, WebSocket
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, WebSocket
+from fastapi_limiter.depends import RateLimiter
 
 from backend.app.shasec.schema.ai_analysis import GetAIAnalysisDetails
 from backend.app.shasec.schema.finding import GetFindingDetails
@@ -72,14 +73,16 @@ async def get_pagination_scans(
     return response_base.success(request=request, data=page_data)
 
 
-@router.post('/', summary='Create scan', dependencies=[DependsJwtAuth])
+@router.post('/', summary='Create scan',
+             dependencies=[DependsJwtAuth, Depends(RateLimiter(times=20, minutes=60))])
 async def create_scan(request: Request, obj: CreateScanParam) -> ResponseModel:
     scan = await scan_service.create(actor=actor_from(request), obj=obj)
     data = GetScanDetails(**select_as_dict(scan))
     return response_base.success(request=request, data=data)
 
 
-@router.post('/quick', summary='Quick scan from a URL', dependencies=[DependsJwtAuth])
+@router.post('/quick', summary='Quick scan from a URL',
+             dependencies=[DependsJwtAuth, Depends(RateLimiter(times=20, minutes=60))])
 async def quick_scan(request: Request, obj: QuickScanParam) -> ResponseModel:
     scan = await scan_service.quick(
         actor=actor_from(request), url=obj.url, type=obj.type, name=obj.name,

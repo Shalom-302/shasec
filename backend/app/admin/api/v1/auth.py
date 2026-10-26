@@ -4,9 +4,11 @@ from starlette.background import BackgroundTasks
 
 from backend.app.admin.schema.user import (
     GetCurrentUserInfoDetail,
+    ResendOtpParam,
     # UpdatePasswordParam,
     UserLoginSchema,
-    UserRegister
+    UserRegister,
+    VerifyOtpParam,
 )
 from backend.app.admin.service.auth_service import auth_service
 # from backend.app.user.service.user_service import user_service
@@ -37,6 +39,26 @@ async def user_login(
     request: Request, response: Response, obj: UserLoginSchema, background_tasks: BackgroundTasks
 ) -> ResponseModel:
     data = await auth_service.login(request=request, response=response, obj=obj, background_tasks=background_tasks)
+    return response_base.success(request=request, data=data)
+
+
+@router.post(
+    '/verify-otp',
+    summary='Verify the WhatsApp sign-up code and activate the account',
+    dependencies=[Depends(RateLimiter(times=10, minutes=10))],
+)
+async def verify_otp(request: Request, response: Response, obj: VerifyOtpParam) -> ResponseModel:
+    data = await auth_service.verify_otp(request=request, response=response, obj=obj)
+    return response_base.success(request=request, data=data)
+
+
+@router.post(
+    '/resend-otp',
+    summary='Resend the WhatsApp sign-up code',
+    dependencies=[Depends(RateLimiter(times=3, minutes=10))],
+)
+async def resend_otp(request: Request, obj: ResendOtpParam) -> ResponseModel:
+    data = await auth_service.resend_otp(request=request, obj=obj)
     return response_base.success(request=request, data=data)
 
 

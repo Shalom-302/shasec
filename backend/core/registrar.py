@@ -81,15 +81,53 @@ def register_app(router: APIRouter, name: str = "Parse name" ) -> FastAPI:
     # middleware
     register_middleware(app, name)
 
+    # Password-protected API docs at a secret path (even when public docs are off).
+    register_private_docs(app)
+
     # routing (in computer networks)
     register_router(app, router)
-    
+
     # tab window (in a web browser etc)
     register_page(app)
 
     # Global Exception Handling
     register_exception(app)
     return app
+
+
+def register_private_docs(app: FastAPI) -> None:
+    """Serve Swagger UI + OpenAPI behind HTTP Basic at a secret path, so the docs
+    can be reopened privately while the public /docs stays closed in prod. No-op
+    unless DOCS_BASIC_USER and DOCS_BASIC_PASSWORD are both set."""
+    import secrets
+
+    from fastapi import Depends, HTTPException, status
+    from fastapi.openapi.docs import get_swagger_ui_html
+    from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+    if not (settings.DOCS_BASIC_USER and settings.DOCS_BASIC_PASSWORD):
+        return
+
+    security = HTTPBasic()
+    base = settings.FASTAPI_PRIVATE_DOCS_PATH.rstrip('/')
+    openapi_path = f'{base}/openapi.json'
+
+    def _check(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+        ok_user = secrets.compare_digest(credentials.username, settings.DOCS_BASIC_USER)
+        ok_pass = secrets.compare_digest(credentials.password, settings.DOCS_BASIC_PASSWORD)
+        if not (ok_user and ok_pass):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail='Unauthorized',
+                headers={'WWW-Authenticate': 'Basic'},
+            )
+
+    @app.get(base, include_in_schema=False)
+    async def _private_swagger(_: None = Depends(_check)):
+        return get_swagger_ui_html(openapi_url=openapi_path, title=f'{settings.FASTAPI_TITLE} — docs')
+
+    @app.get(openapi_path, include_in_schema=False)
+    async def _private_openapi(_: None = Depends(_check)):
+        return app.openapi()
 
 
 def register_logger() -> None:
