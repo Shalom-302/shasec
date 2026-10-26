@@ -87,6 +87,23 @@ class Settings(BaseSettings):
     # Pending advanced-audit requests a self-service account may have at once.
     SHASEC_MAX_PENDING_REQUESTS_PER_USER: int = 3
 
+    # WhatsApp OTP at sign-up (via gowa / go-whatsapp-web-multidevice). When
+    # OTP_ENABLED is true, a self-service registration creates an UNVERIFIED
+    # account, a 6-digit code is sent to the user's phone over WhatsApp, and login
+    # is blocked until the code is verified. Left false (dev/CLI), sign-up behaves
+    # as before (auto-verified). gowa: POST {GOWA_URL}/send/message (basic auth),
+    # body {"phone":"<digits>@s.whatsapp.net","message":"..."}.
+    OTP_ENABLED: bool = False
+    OTP_LENGTH: int = 6
+    OTP_TTL_SECONDS: int = 600          # code lifetime
+    OTP_MAX_ATTEMPTS: int = 5           # wrong tries before the code is burned
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    OTP_REDIS_PREFIX: str = 'shasec:otp'
+    GOWA_URL: str = ''
+    GOWA_BASIC_USER: str = ''
+    GOWA_BASIC_PASS: str = ''
+    GOWA_TIMEOUT: int = 20
+
     # Hermes agent — the NL assistant that drives shasec (scans/findings) for the
     # operator (and, later, premium clients). The backend relays a chat message to
     # the Hermes HTTP endpoint over the INTERNAL docker network; Hermes is never

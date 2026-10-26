@@ -4,10 +4,11 @@ from datetime import datetime
 from starlette.background import BackgroundTask, BackgroundTasks
 
 from backend.app.shasec.service.credit_service import credit_service
+from backend.app.shasec.service.otp_service import otp_service
 from backend.crud.crud_user import user_dao
 from backend.models.user import User
 from backend.app.admin.schema.token import GetLoginToken, GetNewToken
-from backend.app.admin.schema.user import UserLoginSchema, UserRegister
+from backend.app.admin.schema.user import ResendOtpParam, UserLoginSchema, UserRegister, VerifyOtpParam
 from backend.app.admin.service.login_log_service import LoginLogService
 from backend.common.enums import LoginLogStatusType
 from backend.common.exception import errors
@@ -58,6 +59,18 @@ class AuthService:
             new_user = await user_dao.add(db, obj, role_name=settings.REGISTER_DEFAULT_ROLE)
             # Kortex free tier: one-shot discovery scans, granted once per account.
             await credit_service.grant_signup(db, new_user.id)
+
+            # WhatsApp OTP gate: create the account UNVERIFIED, send the code, and
+            # return without tokens — the user logs in only after /auth/verify-otp.
+            # A gowa failure raises here, rolling back the whole registration so no
+            # orphan unverified account is left behind.
+            if settings.OTP_ENABLED:
+                if not new_user.phone:
+                    raise errors.ForbiddenError(msg='Numéro de téléphone requis pour la vérification WhatsApp.')
+                new_user.email_verified = False
+                await db.flush()
+                await otp_service.start(email=new_user.email, phone=new_user.phone)
+                return {'otp_required': True, 'email': new_user.email}
 
             # current_user_id = new_user.x_id
             # is_multi_login = new_user.is_multi_login
@@ -120,6 +133,9 @@ class AuthService:
                     raise errors.AuthorizationError(msg=translator.t('auth.incorrect_credential'))
                 elif not current_user.status:
                     raise errors.AuthorizationError(msg=translator.t('auth.account_locked'))
+                elif settings.OTP_ENABLED and not current_user.email_verified:
+                    # Recognisable message so the web can route to the OTP screen.
+                    raise errors.AuthorizationError(msg='OTP_REQUIRED: compte non vérifié, entrez le code reçu par WhatsApp.')
 
                 access_token = await create_access_token(str(user_x_id), settings.TOKEN_MULTI_LOGIN)
                 refresh_token = await create_refresh_token(str(user_x_id), settings.TOKEN_MULTI_LOGIN)
@@ -174,6 +190,54 @@ class AuthService:
                 )
                 return data
 
+
+    @staticmethod
+    @staticmethod
+    async def verify_otp(*, request: Request, response: Response, obj: VerifyOtpParam) -> GetLoginToken:
+        translator = Translator(request.state.locale)
+        async with async_db_session.begin() as db:
+            user = await user_dao.get_with_relation(db, email=obj.email, populates=['roles'])
+            if not user:
+                raise errors.NotFoundError(msg=translator.t('auth.incorrect_credential'))
+            if not user.email_verified:
+                await otp_service.verify(obj.email, obj.code)  # raises on bad/expired code
+                user.email_verified = True
+                await db.flush()
+            x_id = user.x_id
+            access_token = await create_access_token(str(x_id), settings.TOKEN_MULTI_LOGIN)
+            refresh_token = await create_refresh_token(str(x_id), settings.TOKEN_MULTI_LOGIN)
+            n_user = await user_dao.get_with_relation(db, x_id=x_id, populates=['roles'])
+        response.set_cookie(
+            key=settings.COOKIE_REFRESH_TOKEN_KEY,
+            value=refresh_token.refresh_token,
+            max_age=settings.COOKIE_REFRESH_TOKEN_EXPIRE_SECONDS,
+            expires=timezone.f_utc(refresh_token.refresh_token_expire_time),
+            httponly=True,
+            samesite=settings.COOKIE_SAMESITE,
+            secure=settings.COOKIE_SECURE or settings.ENVIRONMENT != 'dev',
+        )
+        return GetLoginToken(
+            access_token=access_token.access_token,
+            access_token_expire_time=access_token.access_token_expire_time,
+            user=n_user,  # type: ignore
+        )
+
+    @staticmethod
+    async def resend_otp(*, request: Request, obj: ResendOtpParam) -> dict:
+        translator = Translator(request.state.locale)
+        async with async_db_session() as db:
+            user = await user_dao.get_by_email(db, obj.email)
+        if not user:
+            raise errors.NotFoundError(msg=translator.t('auth.incorrect_credential'))
+        if user.email_verified:
+            raise errors.ForbiddenError(msg='Ce compte est déjà vérifié.')
+        if not user.phone:
+            raise errors.ForbiddenError(msg='Aucun numéro associé à ce compte.')
+        if not await otp_service.can_resend(obj.email):
+            raise errors.ForbiddenError(msg='Patientez un instant avant de redemander un code.')
+        await otp_service.start(email=obj.email, phone=user.phone)
+        await otp_service.mark_resent(obj.email)
+        return {'sent': True}
 
     @staticmethod
     async def new_token(*, request: Request, response: Response) -> GetNewToken:

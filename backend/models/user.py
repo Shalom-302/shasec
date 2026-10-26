@@ -22,6 +22,10 @@ class User(Base):
     password: Mapped[str] = mapped_column(sa.String, nullable=False)
     salt: Mapped[str] = mapped_column(sa.String, nullable=True)
     status: Mapped[bool] = mapped_column(sa.Boolean, default=True, server_default='1')  # User account status (False: deactivated, True: normal)
+    # WhatsApp-OTP sign-up gate. server_default True so EVERY pre-existing account
+    # (admins, already-created clients) stays verified and is never locked out;
+    # only new self-service registrations are created with this False.
+    email_verified: Mapped[bool] = mapped_column(sa.Boolean, init=False, default=True, server_default='1')
     is_multi_login: Mapped[bool] = mapped_column(sa.Boolean(), nullable=False, default=False, server_default='1')
     last_login_time: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), init=False, onupdate=func.now(), default=current_timestamp())
     join_time: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), init=False, default=current_timestamp())

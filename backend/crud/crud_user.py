@@ -110,11 +110,19 @@ class CRUDUser(CRUDBase[User]):
         salt = text_captcha(5)
         obj.password = get_hash_password(f'{obj.password}{salt}')
         dict_obj = obj.model_dump(exclude={'roles'})
-        
+        # phone/email_verified are init=False mapped columns (not constructor args),
+        # so pull them out and assign after construction.
+        phone = dict_obj.pop('phone', None)
+        email_verified = dict_obj.pop('email_verified', None)
+
         dict_obj.update({'salt': salt})
 
-        
+
         new_admin = self.model(**dict_obj)
+        if phone is not None:
+            new_admin.phone = phone
+        if email_verified is not None:
+            new_admin.email_verified = email_verified
 
         
         role = await role_dao.get_by_name(db, role_name)

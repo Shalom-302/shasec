@@ -28,6 +28,10 @@ class UserLoginSchema(SchemaBase):
 class UserRegister(SchemaBase):
     password: str
     email: EmailStr
+    # International number, digits only (e.g. 2250152311124). Used for the WhatsApp
+    # OTP. Optional so the CLI/admin creation still works; required by the public
+    # register endpoint when OTP is enabled (checked in the service).
+    phone: str | None = None
 
     @field_validator('password')
     @classmethod
@@ -39,6 +43,25 @@ class UserRegister(SchemaBase):
         if not v[0].isupper():
             raise ValueError('Le mot de passe doit commencer par une majuscule.')
         return v
+
+    @field_validator('phone')
+    @classmethod
+    def _phone_digits(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        digits = ''.join(ch for ch in v if ch.isdigit())
+        if not (8 <= len(digits) <= 15):
+            raise ValueError('Numéro de téléphone invalide (indicatif + numéro, chiffres uniquement).')
+        return digits
+
+
+class VerifyOtpParam(SchemaBase):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=8)
+
+
+class ResendOtpParam(SchemaBase):
+    email: EmailStr
 
 
 class UserUpdate(UserBase):
