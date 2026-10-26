@@ -121,8 +121,8 @@ class AuthService:
                 elif not current_user.status:
                     raise errors.AuthorizationError(msg=translator.t('auth.account_locked'))
 
-                access_token = await create_access_token(str(user_x_id), False)
-                refresh_token = await create_refresh_token(str(user_x_id), False)
+                access_token = await create_access_token(str(user_x_id), settings.TOKEN_MULTI_LOGIN)
+                refresh_token = await create_refresh_token(str(user_x_id), settings.TOKEN_MULTI_LOGIN)
 
             except errors.NotFoundError as e:
                 raise errors.NotFoundError(msg=e.msg)
@@ -199,7 +199,7 @@ class AuthService:
                 sub=str(current_user.x_id),
                 token=current_token,
                 refresh_token=refresh_token,
-                multi_login=False,
+                multi_login=settings.TOKEN_MULTI_LOGIN,
             )
             response.set_cookie(
                 key=settings.COOKIE_REFRESH_TOKEN_KEY,
@@ -229,10 +229,17 @@ class AuthService:
         #         key = f'{settings.TOKEN_REFRESH_REDIS_PREFIX}:{request.user.id}:{refresh_token}'
         #         await redis_client.delete(key)
         # else:
-        key_prefix = f'{settings.TOKEN_REDIS_PREFIX}:{request.user.x_id}:'
-        await redis_client.delete_prefix(key_prefix)
-        key_prefix = f'{settings.TOKEN_REFRESH_REDIS_PREFIX}:{request.user.x_id}:'
-        await redis_client.delete_prefix(key_prefix)
+        if settings.TOKEN_MULTI_LOGIN:
+            # Multi-session: log out ONLY this session, leave the user's other
+            # tabs/devices signed in.
+            await redis_client.delete(f'{settings.TOKEN_REDIS_PREFIX}:{request.user.x_id}:{token}')
+            if refresh_token:
+                await redis_client.delete(f'{settings.TOKEN_REFRESH_REDIS_PREFIX}:{request.user.x_id}:{refresh_token}')
+        else:
+            key_prefix = f'{settings.TOKEN_REDIS_PREFIX}:{request.user.x_id}:'
+            await redis_client.delete_prefix(key_prefix)
+            key_prefix = f'{settings.TOKEN_REFRESH_REDIS_PREFIX}:{request.user.x_id}:'
+            await redis_client.delete_prefix(key_prefix)
 
 
 auth_service = AuthService()
