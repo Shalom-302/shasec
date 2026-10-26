@@ -12,6 +12,7 @@
 services:
   api:
     image: ghcr.io/shalom-302/shasec:latest
+    pull_policy: always  # :latest is mutable: always fetch the fresh CI build
     restart: unless-stopped
     environment:
       # 'prod' by default (docs off, secret guard on). Set ENVIRONMENT=preprod in
@@ -91,6 +92,7 @@ services:
   # In Dokploy, point the public domain at service `web`, port 3000.
   web:
     image: ghcr.io/shalom-302/shasec-web:latest
+    pull_policy: always  # :latest is mutable: always fetch the fresh CI build
     restart: unless-stopped
     environment:
       - SHAAPI_URL=http://shasec-api:8000
@@ -108,6 +110,7 @@ services:
   # a scan survives an API restart). Same image, different entrypoint.
   worker:
     image: ghcr.io/shalom-302/shasec:latest
+    pull_policy: always  # :latest is mutable: always fetch the fresh CI build
     restart: unless-stopped
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-prod}
