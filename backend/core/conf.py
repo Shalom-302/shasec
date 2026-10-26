@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     OTP_TTL_SECONDS: int = 600          # code lifetime
     OTP_MAX_ATTEMPTS: int = 5           # wrong tries before the code is burned
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    # Codes sent to one phone number per hour (sign-up + resends). Protects the
+    # gowa WhatsApp number from being used to spam strangers (= ban risk).
+    OTP_MAX_SENDS_PER_PHONE_HOUR: int = 3
     OTP_REDIS_PREFIX: str = 'shasec:otp'
     # Prepended to a sign-up phone typed in local format (leading 0, no "+"/"00").
     PHONE_DEFAULT_COUNTRY_CODE: str = '225'
