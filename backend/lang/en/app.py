@@ -14,5 +14,6 @@ locale = {
   "http_500": "Internal server error",
   "http_502": "Gateway error",
   "http_503": "Service unavailable",
-  "http_504": "Gateway timeout"
+  "http_504": "Gateway timeout",
+  "too_many_attempts": "Too many attempts. Try again in {minutes} min."
 }

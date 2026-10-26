@@ -4,6 +4,7 @@ The host ``shaapi`` wrapper invokes these over ``docker compose exec``. For
 example ``shaapi auth init`` runs, inside the container::
 
     python -m backend.cli create-admin --email you@example.com --password ...
+    python -m backend.cli create-user  --email client@example.com --password ...
 
 Kept on argparse + asyncio (stdlib only) so it has no extra dependency beyond
 the backend itself.
@@ -43,6 +44,28 @@ async def create_admin(email: str, password: str) -> int:
     return 0
 
 
+async def create_user(email: str, password: str) -> int:
+    """Create a regular client account (idempotent), as self-registration does
+    — same default role and signup credits — but without the public rate limit."""
+    from backend.app.admin.schema.user import UserRegister
+    from backend.app.shasec.service.credit_service import credit_service
+    from backend.core.conf import settings
+    from backend.crud.crud_user import user_dao
+    from backend.database.db_postgres import async_db_session
+
+    async with async_db_session() as db:
+        if await user_dao.get_by_email(db, email) is not None:
+            print(f"[skip] A user with email {email} already exists.")
+            return 0
+
+        user = await user_dao.add(db, UserRegister(email=email, password=password), role_name=settings.REGISTER_DEFAULT_ROLE)
+        await credit_service.grant_signup(db, user.id)
+        await db.commit()
+
+    print(f"[ok] User created: {email} (role: {settings.REGISTER_DEFAULT_ROLE})")
+    return 0
+
+
 def storage_init() -> int:
     """Ensure the configured object-storage bucket exists."""
     # Importing the singleton constructs the client, which creates the bucket
@@ -69,11 +92,17 @@ def main() -> int:
     ca.add_argument("--email", required=True, help="Admin email (login).")
     ca.add_argument("--password", required=True, help="Admin password.")
 
+    cu = sub.add_parser("create-user", help="Create a regular client user")
+    cu.add_argument("--email", required=True, help="User email (login).")
+    cu.add_argument("--password", required=True, help="User password.")
+
     sub.add_parser("storage-init", help="Ensure the object-storage bucket exists")
 
     args = parser.parse_args()
     if args.command == "create-admin":
         return asyncio.run(create_admin(args.email, args.password))
+    if args.command == "create-user":
+        return asyncio.run(create_user(args.email, args.password))
     if args.command == "storage-init":
         return storage_init()
     return 1

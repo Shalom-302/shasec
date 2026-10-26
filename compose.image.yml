@@ -61,7 +61,11 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
-    networks: [shasec]
+    # Unique alias: Dokploy also attaches services to the shared dokploy-network,
+    # where a bare "api" can resolve to ANOTHER project's api container.
+    networks:
+      shasec:
+        aliases: [shasec-api]
 
   # Kortex Security web console (Next.js, shasec-web/). Talks to the API over the
   # internal `shasec` network only — the browser never reaches the API directly.
@@ -70,7 +74,7 @@ services:
     image: ghcr.io/shalom-302/shasec-web:latest
     restart: unless-stopped
     environment:
-      - SHAAPI_URL=http://api:8000
+      - SHAAPI_URL=http://shasec-api:8000
       # Must match the API's settings.COOKIE_REFRESH_TOKEN_KEY.
       - SHAAPI_REFRESH_COOKIE=${SHAAPI_REFRESH_COOKIE:-monshaapi_refresh_token}
       # "true" once the domain is served over HTTPS (Secure session cookies).
