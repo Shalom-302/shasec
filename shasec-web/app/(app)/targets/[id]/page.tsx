@@ -8,7 +8,7 @@ import { ErrorBox, Loading, PageHeader, StatusBadge, TextLink, VerifiedBadge } f
 import { api } from '@/lib/api';
 import { fmtDate, PROFILE_LABEL, TYPE_LABEL } from '@/lib/format';
 import { TERMS_VERSION } from '@/lib/terms';
-import type { Page, Scan, Target } from '@/lib/types';
+import type { Page, Scan, Target, TargetType } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 
 export default function TargetDetailPage() {
@@ -42,6 +42,22 @@ export default function TargetDetailPage() {
     } catch (e: any) { setMsg({ ok: false, text: e.message }); } finally { setBusy(''); }
   };
 
+  const [edit, setEdit] = useState<{ name: string; url: string; type: TargetType } | null>(null);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!edit || !target.data) return;
+    const urlChanged = edit.url.trim() !== target.data.url;
+    if (urlChanged && target.data.is_authorized
+      && !confirm('Changer l’URL retire l’autorisation de scan : il faudra attester à nouveau. Continuer ?')) return;
+    setBusy('edit'); setMsg(null);
+    try {
+      await api(`/targets/${id}`, { method: 'PUT', body: { name: edit.name.trim() || edit.url.trim(), url: edit.url.trim(), type: edit.type } });
+      setEdit(null);
+      target.setData(await api<Target>(`/targets/${id}`));
+      setMsg({ ok: true, text: 'Application modifiée.' });
+    } catch (e: any) { setMsg({ ok: false, text: e.message }); } finally { setBusy(''); }
+  };
+
   const remove = async () => {
     if (!confirm('Supprimer cette application et tout son historique de scans ?')) return;
     setBusy('delete');
@@ -67,14 +83,40 @@ export default function TargetDetailPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="card space-y-3 lg:col-span-1">
           <h2 className="card-title">Informations</h2>
-          <Row k="Type" v={TYPE_LABEL[t.type] || t.type} />
-          <Row k="Statut" v={<VerifiedBadge ok={t.is_authorized} />} />
-          {t.authorized_at && <Row k="Autorisée le" v={fmtDate(t.authorized_at)} />}
-          <Row k="Ajoutée le" v={fmtDate(t.created_time)} />
-          <div className="flex flex-wrap gap-2 pt-2">
-            {t.is_authorized && <button className="btn-ghost btn-sm" disabled={!!busy} onClick={revoke}>Retirer l’autorisation</button>}
-            <button className="btn-danger" disabled={!!busy} onClick={remove}>Supprimer</button>
-          </div>
+          {edit ? (
+            <form onSubmit={save} className="space-y-3">
+              <div>
+                <label className="label" htmlFor="e-name">Nom</label>
+                <input id="e-name" className="input" value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="label" htmlFor="e-url">URL</label>
+                <input id="e-url" className="input" required value={edit.url} onChange={e => setEdit({ ...edit, url: e.target.value })} />
+              </div>
+              <div>
+                <label className="label" htmlFor="e-type">Type</label>
+                <select id="e-type" className="input" value={edit.type} onChange={e => setEdit({ ...edit, type: e.target.value as TargetType })}>
+                  {(Object.keys(TYPE_LABEL) as TargetType[]).map(k => <option key={k} value={k}>{TYPE_LABEL[k]}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button className="btn btn-sm" disabled={!!busy || !edit.url.trim()}>{busy === 'edit' ? 'Enregistrement…' : 'Enregistrer'}</button>
+                <button type="button" className="btn-ghost btn-sm" onClick={() => setEdit(null)}>Annuler</button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <Row k="Type" v={TYPE_LABEL[t.type] || t.type} />
+              <Row k="Statut" v={<VerifiedBadge ok={t.is_authorized} />} />
+              {t.authorized_at && <Row k="Autorisée le" v={fmtDate(t.authorized_at)} />}
+              <Row k="Ajoutée le" v={fmtDate(t.created_time)} />
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button className="btn-ghost btn-sm" disabled={!!busy} onClick={() => setEdit({ name: t.name, url: t.url, type: t.type })}>Modifier</button>
+                {t.is_authorized && <button className="btn-ghost btn-sm" disabled={!!busy} onClick={revoke}>Retirer l’autorisation</button>}
+                <button className="btn-danger" disabled={!!busy} onClick={remove}>Supprimer</button>
+              </div>
+            </>
+          )}
         </section>
 
         <section className="card space-y-4 lg:col-span-2">

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScanProgress } from '@/components/ScanProgress';
 import { ErrorBox, Loading, PageHeader, SeverityBadge, StatusBadge, TextLink } from '@/components/ui';
@@ -17,6 +17,7 @@ const POLL_QUEUED_MS = 6000;
 
 export default function ScanDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const scan = useAsync(() => api<Scan>(`/scans/${id}`), [id]);
   const target = useAsync(
     () => (scan.data ? api<Target>(`/targets/${scan.data.target_id}`) : Promise.resolve(null)),
@@ -86,6 +87,16 @@ export default function ScanDetailPage() {
     finally { setCancelling(false); }
   };
 
+  const [deleting, setDeleting] = useState(false);
+  const remove = async () => {
+    if (!confirm('Supprimer ce scan, ses vulnérabilités et ses rapports ? Cette action est définitive.')) return;
+    setDeleting(true);
+    try {
+      await api('/scans', { method: 'DELETE', query: { pk: id } });
+      router.push('/scans');
+    } catch (e: any) { setPollErr(e.message); setDeleting(false); }
+  };
+
   if (scan.loading && !scan.data) return <Loading />;
   if (scan.error) return <ErrorBox message={scan.error} onRetry={scan.reload} />;
   const s = scan.data!;
@@ -96,7 +107,9 @@ export default function ScanDetailPage() {
       <PageHeader
         title={`Scan #${s.id}`}
         sub={target.data ? <><Link href={`/targets/${target.data.id}`} className="hover:underline">{target.data.name}</Link> · <span className="font-mono">{target.data.url}</span></> : undefined}
-        actions={!done && <button className="btn-ghost" onClick={cancel} disabled={cancelling}>{status === 'queued' ? 'Annuler' : 'Arrêter le scan'}</button>}
+        actions={done
+          ? <button className="btn-danger" onClick={remove} disabled={deleting}>{deleting ? 'Suppression…' : 'Supprimer'}</button>
+          : <button className="btn-ghost" onClick={cancel} disabled={cancelling}>{status === 'queued' ? 'Annuler' : 'Arrêter le scan'}</button>}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">

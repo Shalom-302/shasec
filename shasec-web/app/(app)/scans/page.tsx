@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Empty, ErrorBox, Loading, Pager, PageHeader, StatusBadge, TextLink } from '@/components/ui';
 import { api } from '@/lib/api';
-import { BILLING_LABEL, fmtDate, hostOf, PROFILE_LABEL, STATUS_LABEL } from '@/lib/format';
+import { BILLING_LABEL, fmtDate, hostOf, isTerminal, PROFILE_LABEL, STATUS_LABEL } from '@/lib/format';
 import type { Page, Scan, ScanStatus, Target } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 
@@ -17,6 +17,13 @@ export default function ScansPage() {
     () => api<Page<Scan>>('/scans', { query: { page, size: 20, status, target_id: targetId } }),
     [page, status, targetId],
   );
+  const [delErr, setDelErr] = useState('');
+  const remove = async (s: Scan) => {
+    if (!confirm(`Supprimer le scan #${s.id}, ses vulnérabilités et ses rapports ? Cette action est définitive.`)) return;
+    setDelErr('');
+    try { await api('/scans', { method: 'DELETE', query: { pk: s.id } }); scans.reload(); }
+    catch (e: any) { setDelErr(e.message); }
+  };
   const host = (id: number) => {
     const t = targets.data?.items.find(x => x.id === id);
     return t ? hostOf(t.url) : `Cible #${id}`;
@@ -43,6 +50,7 @@ export default function ScansPage() {
         </div>
       </div>
 
+      {delErr && <div className="mb-4"><ErrorBox message={delErr} /></div>}
       {scans.loading && <Loading />}
       {scans.error && <ErrorBox message={scans.error} onRetry={scans.reload} />}
       {scans.data && scans.data.items.length === 0 && (
@@ -64,7 +72,12 @@ export default function ScansPage() {
                   </td>
                   <td><StatusBadge status={s.status} /></td>
                   <td className="whitespace-nowrap text-kx-muted">{fmtDate(s.created_time)}</td>
-                  <td className="text-right"><TextLink href={`/scans/${s.id}`}>Détail</TextLink></td>
+                  <td className="whitespace-nowrap text-right">
+                    <TextLink href={`/scans/${s.id}`}>Détail</TextLink>
+                    {isTerminal(s.status) && (
+                      <button className="ml-3 text-sm text-red-700 hover:underline" onClick={() => remove(s)}>Supprimer</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
