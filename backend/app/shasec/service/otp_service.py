@@ -55,25 +55,20 @@ async def _consume_phone_quota(phone: str) -> None:
             msg="Trop de codes envoyés à ce numéro. Réessayez dans une heure.")
 
 
-async def _ensure_on_whatsapp(phone: str) -> None:
-    """Refuse a number gowa reports as not on WhatsApp, before sending anything.
+class _Unreachable(Exception):
+    """gowa answered but could not deliver to this JID (e.g. "no LID found")."""
 
-    Best-effort: if the check itself fails (gowa without /user/check, timeout,
-    unexpected payload) we let the send go through and its own error handling apply.
+
+def _wa_candidates(phone: str) -> list[str]:
+    """JIDs to try for a number, most likely first.
+
+    Côte d'Ivoire moved to 10-digit numbers in 2021 (an 01/05/07 prefix in front
+    of the old 8 digits), but many WhatsApp accounts are still registered under
+    the old number: 225 07 88 01 62 04 lives on WhatsApp as 225 88 01 62 04.
     """
-    if not settings.GOWA_URL:
-        return
-    try:
-        async with httpx.AsyncClient(timeout=settings.GOWA_TIMEOUT) as client:
-            resp = await client.get(f'{settings.GOWA_URL.rstrip("/")}/user/check',
-                                    params={'phone': phone}, headers=_auth_headers())
-        on_wa = (resp.json().get('results') or {}).get('is_on_whatsapp') if resp.status_code == 200 else None
-    except Exception as exc:  # noqa: BLE001
-        log.warning(f'gowa user/check failed for {phone}: {exc}')
-        return
-    if on_wa is False:
-        raise errors.ForbiddenError(
-            msg="Ce numéro n’est pas associé à un compte WhatsApp. Vérifiez-le (indicatif compris).")
+    if phone.startswith('2250') and len(phone) == 13:
+        return [phone, '225' + phone[5:]]
+    return [phone]
 
 
 def _gen_code() -> str:
@@ -93,15 +88,27 @@ async def _send_whatsapp(phone: str, message: str) -> None:
         log.error(f'gowa send failed for {jid}: {exc}')
         raise errors.ServerError(msg="Envoi du code WhatsApp impossible pour le moment.") from exc
     if resp.status_code >= 400:
-        log.error(f'gowa send {resp.status_code}: {resp.text[:200]}')
-        raise errors.ServerError(msg="Envoi du code WhatsApp refusé. Vérifiez le numéro.")
+        log.error(f'gowa send {resp.status_code} for {jid}: {resp.text[:200]}')
+        raise _Unreachable(jid)
+
+
+async def _send_to_any(phone: str, message: str) -> None:
+    """Send to the first candidate JID WhatsApp accepts (a failed try sends nothing)."""
+    for jid in _wa_candidates(phone):
+        try:
+            await _send_whatsapp(jid, message)
+            return
+        except _Unreachable:
+            continue
+    # 4xx so the web form shows the message (5xx are masked as "indisponible").
+    raise errors.ForbiddenError(
+        msg="Ce numéro n’est pas joignable sur WhatsApp. Vérifiez-le (indicatif compris).")
 
 
 class OtpService:
     @staticmethod
     async def start(email: str, phone: str) -> None:
         """Generate a code, store it (TTL + fresh attempt counter), send it."""
-        await _ensure_on_whatsapp(phone)
         await _consume_phone_quota(phone)
         code = _gen_code()
         try:
@@ -111,7 +118,7 @@ class OtpService:
             log.error(f'otp store failed for {email}: {exc}')
             raise errors.ServerError(msg="Impossible de générer le code pour le moment.") from exc
         minutes = settings.OTP_TTL_SECONDS // 60
-        await _send_whatsapp(
+        await _send_to_any(
             phone,
             f'Kortex Security : votre code de vérification est {code}. '
             f'Il expire dans {minutes} minutes. Ne le partagez avec personne.',
