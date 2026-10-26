@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import ConfigDict, EmailStr, Field, HttpUrl, model_validator
+from pydantic import ConfigDict, EmailStr, Field, HttpUrl, field_validator, model_validator
 from typing_extensions import Self
 
 from backend.common.enums import StatusType
@@ -28,6 +28,17 @@ class UserLoginSchema(SchemaBase):
 class UserRegister(SchemaBase):
     password: str
     email: EmailStr
+
+    @field_validator('password')
+    @classmethod
+    def _password_policy(cls, v: str) -> str:
+        # Public sign-up: enforce the policy server-side (the API is reachable
+        # directly, not only through the web form). >=8 chars, first letter uppercase.
+        if not v or len(v) < 8:
+            raise ValueError('Le mot de passe doit contenir au moins 8 caractères.')
+        if not v[0].isupper():
+            raise ValueError('Le mot de passe doit commencer par une majuscule.')
+        return v
 
 
 class UserUpdate(UserBase):

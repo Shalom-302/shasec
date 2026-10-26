@@ -4,7 +4,8 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Request
+from fastapi import APIRouter, Depends, Path, Request
+from fastapi_limiter.depends import RateLimiter
 from sqlalchemy import select, update
 
 from backend.app.shasec.schema.credit import (
@@ -74,7 +75,8 @@ async def get_my_transactions(request: Request, db: CurrentSession) -> ResponseM
     return response_base.success(request=request, data=page_data)
 
 
-@router.post('/redeem', summary='Redeem a credit code', dependencies=[DependsJwtAuth])
+@router.post('/redeem', summary='Redeem a credit code',
+             dependencies=[DependsJwtAuth, Depends(RateLimiter(times=10, minutes=60))])
 async def redeem_code(request: Request, obj: RedeemCodeParam) -> ResponseModel:
     async with async_db_session.begin() as db:
         grant = await credit_service.redeem(db, user_id=actor_from(request).id, code=obj.code)

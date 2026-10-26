@@ -142,6 +142,13 @@ class Settings(BaseSettings):
     FASTAPI_REDOCS_URL: str | None = f'{FASTAPI_API_V1_PATH}/redocs'
     FASTAPI_OPENAPI_URL: str | None = f'{FASTAPI_API_V1_PATH}/openapi'
     FASTAPI_STATIC_FILES: bool = False
+    # Password-protected Swagger: when the built-in docs are off (prod), the API
+    # docs are still reachable at FASTAPI_PRIVATE_DOCS_PATH behind HTTP Basic auth,
+    # but ONLY if both DOCS_BASIC_USER and DOCS_BASIC_PASSWORD are set (empty = off).
+    FASTAPI_PRIVATE_DOCS_PATH: str = '/api/v1/_docs'
+    DOCS_BASIC_USER: str = ''
+    DOCS_BASIC_PASSWORD: str = ''
+
     # Interactive docs (Swagger/ReDoc/OpenAPI) are off in prod by default; set true
     # to expose them at /api/v1/docs even in prod (e.g. during bring-up).
     FASTAPI_EXPOSE_DOCS: bool = False
