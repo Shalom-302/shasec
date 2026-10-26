@@ -150,6 +150,11 @@ class Settings(BaseSettings):
     TOKEN_ALGORITHM: str = 'HS256'
     TOKEN_EXPIRE_SECONDS: int = 60 * 60 * 24 * 1  # access token lifetime
     TOKEN_REFRESH_EXPIRE_SECONDS: int = 60 * 60 * 24 * 7  # refresh token lifetime
+    # Allow several concurrent sessions per user. MUST stay true for the web app:
+    # a browser fires many requests in parallel (polling, multiple tabs), and
+    # single-login (False) wipes all prior tokens on each login/refresh, which
+    # makes in-flight requests 401 and logs the user out almost immediately.
+    TOKEN_MULTI_LOGIN: bool = True
     TOKEN_REDIS_PREFIX: str = 'monshaapi:token'
     USER_SECURE_TOKEN_REDIS_PREFIX: str = 'monshaapi:user:token'
     ADMIN_SECURE_TOKEN_REDIS_PREFIX: str = 'monshaapi:admin:token'
