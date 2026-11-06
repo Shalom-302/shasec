@@ -43,6 +43,8 @@ class UserRegister(SchemaBase):
     # OTP. Optional so the CLI/admin creation still works; required by the public
     # register endpoint when OTP is enabled (checked in the service).
     phone: str | None = None
+    # Referral code from a /register?ref=<code> link (optional, never blocks sign-up).
+    referral_code: str | None = Field(default=None, max_length=16)
 
     @field_validator('password')
     @classmethod

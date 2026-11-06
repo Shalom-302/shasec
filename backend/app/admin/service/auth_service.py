@@ -68,6 +68,9 @@ class AuthService:
             new_user = await user_dao.add(db, obj, role_name=settings.REGISTER_DEFAULT_ROLE)
             # Kortex free tier: one-shot discovery scans, granted once per account.
             await credit_service.grant_signup(db, new_user.id)
+            if obj.referral_code:
+                from backend.app.shasec.service.referral_service import referral_service
+                await referral_service.attach(db, referee_id=new_user.id, code=obj.referral_code, strict=False)
 
             # WhatsApp OTP gate: create the account UNVERIFIED, send the code, and
             # return without tokens — the user logs in only after /auth/verify-otp.

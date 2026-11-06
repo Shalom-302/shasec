@@ -71,6 +71,9 @@ services:
       - MONEYFUSION_VERIFY_URL=${MONEYFUSION_VERIFY_URL:-https://pay.moneyfusion.net/paiementNotif}
       - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET:-}
       - PAYMENT_FEE_TOLERANCE=${PAYMENT_FEE_TOLERANCE:-0.06}
+      # Referral: % of the referee's purchased credits given to the referrer.
+      - REFERRAL_REWARD_PERCENT=${REFERRAL_REWARD_PERCENT:-100}
+      - REFERRAL_FIRST_PURCHASE_ONLY=${REFERRAL_FIRST_PURCHASE_ONLY:-false}
       # Public URL of the web console (payment return page + webhook relay).
       - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-https://security.kortex.sbs}
     # Dokploy/Traefik routes the public domain to this container port.

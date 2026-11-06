@@ -44,7 +44,8 @@ def webhook_url() -> str:
 
 class PaymentService:
     @staticmethod
-    async def create_checkout(*, user_id: int, pack_id: str, phone: str | None) -> Payment:
+    async def create_checkout(*, user_id: int, pack_id: str, phone: str | None,
+                              referral_code: str | None = None) -> Payment:
         pack = settings.PAYMENT_PACKS.get(pack_id)
         if not pack:
             raise errors.RequestError(msg='Offre inconnue.')
@@ -56,6 +57,9 @@ class PaymentService:
             phone = phone or (user.phone if user else None)
             if not phone:
                 raise errors.RequestError(msg='Indiquez le numéro Mobile Money qui va payer.')
+            if referral_code:
+                from backend.app.shasec.service.referral_service import referral_service
+                await referral_service.attach(db, referee_id=user_id, code=referral_code, strict=True)
             since = timezone.now() - timedelta(minutes=30)
             recent = await db.scalar(
                 select(Payment.id).where(Payment.user_id == user_id, Payment.status == 'pending',
@@ -146,6 +150,8 @@ class PaymentService:
                 expires_at=expires_at, external_ref=f'moneyfusion:{reference}',
                 note=f'Achat {pack.get("label", p.pack)} — {p.amount} FCFA',
             )
+            from backend.app.shasec.service.referral_service import referral_service
+            referral = await referral_service.reward(db, p, reference)
         log.info(f'[PAY] user {p.user_id} credited +{p.credits} (…{reference[-6:]})')
 
         from backend.app.shasec.service.notification_service import notification_service
@@ -154,6 +160,12 @@ class PaymentService:
                 p.user_id, kind='account', title=f'Paiement reçu : +{p.credits} crédits',
                 body=f'{p.amount} FCFA — merci !', link='/credits',
             )
+            if referral:
+                await notification_service.notify_user(
+                    referral[0], kind='account', title=f'Parrainage : +{referral[1]} crédits',
+                    body='Un de vos filleuls vient d’acheter des crédits. Merci de faire connaître Kortex Defender !',
+                    link='/parrainage',
+                )
         except Exception as exc:  # noqa: BLE001 - the credit is what matters
             log.warning(f'[PAY] notification failed: {exc}')
         return 'paid'

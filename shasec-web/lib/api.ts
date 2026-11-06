@@ -54,7 +54,7 @@ export async function api<T>(path: string, opts: Opts = {}): Promise<T> {
  * Returns the parsed body so callers can detect `otp_required` on sign-up. */
 export async function authCall(
   mode: 'login' | 'register' | 'logout',
-  body?: { email: string; password: string; phone?: string },
+  body?: { email: string; password: string; phone?: string; referral_code?: string },
 ): Promise<any> {
   const res = await fetch(`/api/auth/${mode}`, {
     method: 'POST',

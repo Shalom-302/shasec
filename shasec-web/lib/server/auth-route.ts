@@ -8,7 +8,7 @@ import { apiFetch, clientIp, publicError, refreshFrom, setSession } from './back
  * NO token — the account is created but unverified. We pass that through so the
  * UI shows the code screen; no session is set until /api/auth/verify-otp. */
 export async function authenticate(req: NextRequest, mode: 'login' | 'register') {
-  let body: { email?: string; password?: string; phone?: string };
+  let body: { email?: string; password?: string; phone?: string; referral_code?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ msg: 'Requête invalide' }, { status: 400 }); }
   const email = String(body.email || '').trim();
   const password = String(body.password || '');
@@ -17,6 +17,8 @@ export async function authenticate(req: NextRequest, mode: 'login' | 'register')
 
   const payload: Record<string, string> = { email, password };
   if (mode === 'register' && phone) payload.phone = phone;
+  const ref = String(body.referral_code || '').trim().slice(0, 16);
+  if (mode === 'register' && ref) payload.referral_code = ref;
 
   const res = await apiFetch(`/auth/${mode}`, {
     method: 'POST',

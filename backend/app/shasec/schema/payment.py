@@ -10,6 +10,8 @@ class CheckoutParam(SchemaBase):
     pack: str = Field(max_length=32)
     # Mobile Money number that pays; defaults to the account's phone.
     phone: str | None = None
+    # Referral code typed at checkout (only if no referrer is attached yet).
+    referral_code: str | None = Field(default=None, max_length=16)
 
     @field_validator('phone')
     @classmethod

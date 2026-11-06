@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Private pages need a session cookie; the API still validates the token on
 // every call (this is a UX gate, not the security boundary).
-const PRIVATE = ['/dashboard', '/targets', '/scans', '/credits', '/settings', '/admin', '/operator'];
+const PRIVATE = ['/dashboard', '/targets', '/scans', '/credits', '/parrainage', '/settings', '/admin', '/operator'];
 const AUTH_PAGES = ['/login', '/register', '/forgot-password'];
 const ADMIN_LOGIN = '/admin/login';
 

@@ -114,6 +114,7 @@ class CRUDUser(CRUDBase[User]):
         # so pull them out and assign after construction.
         phone = dict_obj.pop('phone', None)
         email_verified = dict_obj.pop('email_verified', None)
+        dict_obj.pop('referral_code', None)  # handled by referral_service, not a User column
 
         dict_obj.update({'salt': salt})
 

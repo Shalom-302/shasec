@@ -319,6 +319,7 @@ class CreditSource(StrEnum):
     purchase = "purchase"
     subscription = "subscription"
     admin = "admin"
+    referral = "referral"
 
 
 class CreditTxReason(StrEnum):
