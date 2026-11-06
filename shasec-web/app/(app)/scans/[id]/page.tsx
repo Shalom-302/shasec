@@ -144,7 +144,7 @@ export default function ScanDetailPage() {
       {status === 'awaiting_scope' && (
         <section className="mt-6">
           <h2 className="mb-3 font-display text-lg font-semibold">Périmètre de l’audit</h2>
-          <ScopePicker scanId={s.id} onLaunched={() => { lastStatus.current = undefined; scan.reload(); }} />
+          <ScopePicker scanId={s.id} profile={s.profile} active={s.allow_active_exploitation} onLaunched={() => { lastStatus.current = undefined; scan.reload(); }} />
         </section>
       )}
       {status === 'completed' && <ScanResults scanId={s.id} />}

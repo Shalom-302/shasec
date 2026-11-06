@@ -197,6 +197,29 @@ class CreditService:
         raise errors.PaymentRequiredError(msg=msg, data={'cost': cost})
 
     @staticmethod
+    async def charge_amount(db: AsyncSession, actor: Actor, scan: Scan, amount: int, what: str) -> None:
+        """Debit a fixed ``amount`` of credits for ``scan`` (domain audit fee /
+        per-host price). Accumulates on scan.credits_charged; 402 if not enough."""
+        if actor.is_admin:
+            scan.billing = ScanBilling.admin.value
+            return
+        if amount <= 0:
+            return
+        now = timezone.now()
+        grants = [g for g in (await db.execute(
+            select(CreditGrant)
+            .where(CreditGrant.user_id == actor.id, _active_clause(now), CreditGrant.kind == CreditKind.credit.value)
+            .order_by(CreditGrant.expires_at.asc().nulls_last(), CreditGrant.id.asc())
+            .with_for_update()
+        )).scalars()]
+        if sum(g.remaining for g in grants) < amount:
+            raise errors.PaymentRequiredError(
+                msg=f'Crédits insuffisants : {what} coûte {amount} crédit(s).', data={'cost': amount})
+        CreditService._drain(db, actor.id, grants, amount, CreditKind.credit.value, scan.id)
+        scan.billing = ScanBilling.credits.value
+        scan.credits_charged = (scan.credits_charged or 0) + amount
+
+    @staticmethod
     def _drain(db: AsyncSession, user_id: int, grants: list[CreditGrant], amount: int, kind: str, scan_id: int):
         left = amount
         for g in grants:

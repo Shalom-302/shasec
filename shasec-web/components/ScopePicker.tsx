@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { BulkBar, RowBox, SelectAllBox, useSelection } from '@/components/bulk';
+import { useSession } from '@/components/SessionProvider';
 import { ErrorBox, Loading } from '@/components/ui';
 import { api } from '@/lib/api';
 import type { ScanAsset } from '@/lib/types';
@@ -10,9 +11,12 @@ import { useAsync } from '@/lib/useAsync';
 /** Step 1→2 gate of a domain audit: the operator ticks which discovered hosts
  *  are in scope, then launches steps 2-4. Third-party / dead hosts can't be
  *  picked (the API refuses them too). */
-export function ScopePicker({ scanId, onLaunched }: { scanId: number; onLaunched: () => void }) {
+export function ScopePicker({ scanId, onLaunched, profile, active }: { scanId: number; onLaunched: () => void; profile?: string; active?: boolean }) {
+  const { balance, isAdmin, refreshBalance } = useSession();
   const { data, error, loading, reload } = useAsync(() => api<ScanAsset[]>(`/scans/${scanId}/assets`), [scanId]);
   const assets = data || [];
+  const opts = useAsync(() => api<{ request_active: boolean; has_test_token: boolean }>(`/scans/${scanId}/audit-options`), [scanId]);
+  const wantsActive = !!active || !!opts.data?.request_active;
   const selectable = useMemo(() => assets.filter(a => a.alive && !a.third_party).map(a => a.id), [assets]);
   const sel = useSelection(selectable);
   const [busy, setBusy] = useState(false);
@@ -31,6 +35,7 @@ export function ScopePicker({ scanId, onLaunched }: { scanId: number; onLaunched
     setBusy(true); setErr('');
     try {
       await api(`/scans/${scanId}/scope`, { method: 'POST', body: { asset_ids: sel.ids } });
+      refreshBalance();
       onLaunched();
     } catch (e: any) { setErr(e.message); setBusy(false); }
   };
@@ -39,11 +44,19 @@ export function ScopePicker({ scanId, onLaunched }: { scanId: number; onLaunched
   if (error) return <ErrorBox message={error} onRetry={reload} />;
 
   const alive = assets.filter(a => a.alive).length;
+  const perHost = !isAdmin && balance && profile ? (balance.pricing[profile as 'fast' | 'standard' | 'deep'] ?? 0) + (wantsActive ? 4 : 0) : 0;
+  const total = perHost * sel.count;
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
         <p className="font-semibold">Étape 1 terminée — cartographie du domaine</p>
+        {perHost > 0 && (
+          <p className="mt-1"><b>{perHost} crédit(s) par sous-domaine</b> (profil {profile}). Chaque sous-domaine choisi est testé contre l’OWASP Top 10{wantsActive ? ' ; les tests actifs démarrent après validation d’un expert Kortex' : ''}. Solde : {balance?.credits ?? 0} crédit(s).</p>
+        )}
+        {wantsActive && opts.data && !opts.data.has_test_token && (
+          <p className="mt-1">⚠️ Aucun compte de test fourni : BOLA/IDOR (OWASP A01) ne pourra pas être vérifié.</p>
+        )}
         <p className="mt-1">
           {assets.length} hôte(s) découvert(s), {alive} actif(s). Sélectionnez ceux qui sont dans votre périmètre,
           puis lancez les étapes 2 à 4 (scan passif + actif, accès anonyme, validation). Les hôtes hébergés chez un
@@ -53,7 +66,7 @@ export function ScopePicker({ scanId, onLaunched }: { scanId: number; onLaunched
 
       <BulkBar sel={sel}>
         <button className="btn" disabled={busy || sel.count === 0} onClick={launch}>
-          {busy ? 'Lancement…' : `Lancer l’audit sur ${sel.count} hôte(s)`}
+          {busy ? 'Lancement…' : `Auditer ${sel.count} sous-domaine(s)${perHost ? ` · ${total} crédit(s)` : ''}`}
         </button>
       </BulkBar>
       {err && <ErrorBox message={err} />}

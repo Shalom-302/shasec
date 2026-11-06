@@ -6,7 +6,7 @@ from sqlalchemy import Select, select
 from backend.app.shasec.schema.scan import CreateScanParam
 from backend.app.shasec.schema.target import CreateTargetParam
 from backend.app.shasec.service.access import Actor, ensure_access, require_admin
-from backend.app.shasec.service.credit_service import credit_service
+from backend.app.shasec.service.credit_service import credit_service, scan_cost
 from backend.app.shasec.service.notification_service import notification_service
 from backend.app.shasec.service.orchestrator import run_pipeline
 from backend.app.shasec.service.progress import publish as publish_progress
@@ -36,7 +36,8 @@ _BUSY = (ScanStatus.awaiting_approval.value, ScanStatus.awaiting_scope.value, Sc
 # survive the human awaiting_scope pause WITHOUT being persisted on the scan row
 # (a destructive opt-in must never linger in the DB). We stash them in Redis with a
 # short TTL, keyed by scan id, and pop+delete them when the audit resumes.
-_XOPTS_TTL = 6 * 3600
+# Long enough for a client audit to wait for admin approval of its active tests.
+_XOPTS_TTL = 72 * 3600
 
 
 def _xopts_key(scan_id: int) -> str:
@@ -51,6 +52,17 @@ async def _stash_audit_opts(scan_id: int, auth_token: str | None, options: dict 
         )
     except Exception as exc:  # noqa: BLE001 — resume will just use safe defaults
         log.warning(f'could not stash audit opts for scan {scan_id}: {exc}')
+
+
+async def _peek_audit_opts(scan_id: int) -> tuple[str | None, dict | None]:
+    try:
+        raw = await redis_client.get(_xopts_key(scan_id))
+        if raw:
+            data = json.loads(raw)
+            return data.get('auth_token'), data.get('options')
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f'could not read audit opts for scan {scan_id}: {exc}')
+    return None, None
 
 
 async def _pop_audit_opts(scan_id: int) -> tuple[str | None, dict | None]:
@@ -262,11 +274,15 @@ class ScanService:
                 'status': ScanStatus.queued.value, 'reviewed_by': actor.id,
                 'reviewed_at': timezone.now(), 'review_note': (note or '').strip()[:1000] or None,
             })
-            owner_id = scan.owner_id
+            owner_id, is_audit = scan.owner_id, scan.mode == 'audit'
         await notification_service.notify_user(
             owner_id, kind='audit_decision', title='Audit avance approuve',
             body=f'Votre audit avance (scan #{pk}) a ete valide et va demarrer.', link=f'/scans/{pk}')
-        await _dispatch(pk)
+        if is_audit:
+            auth_token, options = await _pop_audit_opts(pk)
+            await _dispatch(pk, auth_token=auth_token, options=options)
+        else:
+            await _dispatch(pk)
         async with async_db_session() as db:
             return await scan_dao.get(db, pk)
 
@@ -384,6 +400,39 @@ class ScanService:
             return await scan_dao.get(db, scan_id)
 
     @staticmethod
+    async def client_audit(*, actor: Actor, target_id: int, profile: str = 'standard', request_active: bool = False,
+                           auth_token: str | None = None, scope_note: str | None = None) -> Scan:
+        """Whole-domain audit for a self-service client, on a target THEY authorized.
+
+        Step 1 (cartography: subdomains, live hosts, third parties) costs
+        CREDITS_AUDIT_MAP. The audit then pauses on ``awaiting_scope``; the client
+        picks subdomains and pays the profile price per host (set_scope). Active
+        OWASP tests are only *requested* here: they run after admin approval.
+        """
+        async with async_db_session.begin() as db:
+            target = await target_dao.get(db, target_id)
+            ensure_access(actor, target, not_found='Target not found')
+            if not target.is_authorized:
+                raise errors.ForbiddenError(
+                    msg="Autorisez d'abord cette cible (acceptation des conditions d'utilisation).",
+                    data={'target_id': target_id})
+            await _guard_active_limit(db, actor)
+            scan = await scan_dao.create(
+                db, CreateScanParam(target_id=target.id, allow_active_exploitation=False, profile=profile, mode='audit'),
+                owner_id=actor.id)
+            await db.flush()
+            scan.status = ScanStatus.queued.value
+            await credit_service.charge_amount(db, actor, scan, settings.CREDITS_AUDIT_MAP,
+                                               'la cartographie du domaine')
+            scan_id = scan.id
+        options = {'allow_destructive': False, 'aggression': 'safe', 'request_active': bool(request_active),
+                   'scope_note': (scope_note or '').strip()[:2000] or None}
+        await _stash_audit_opts(scan_id, (auth_token or '').strip() or None, options)
+        await _dispatch(scan_id, options={'allow_destructive': False, 'aggression': 'safe'})
+        async with async_db_session() as db:
+            return await scan_dao.get(db, scan_id)
+
+    @staticmethod
     async def set_scope(*, actor: Actor, pk: int, asset_ids: list[int]) -> Scan:
         """Pick the in-scope hosts of a domain audit paused on ``awaiting_scope``
         and resume it (steps 2-4 run only on the selected, live, own hosts).
@@ -409,8 +458,42 @@ class ScanService:
             if blocked:
                 raise errors.ForbiddenError(
                     msg=f'Hôte hors périmètre (tiers ou injoignable) : {blocked[0].host}')
+            needs_approval, stashed_token, stashed = False, None, None
+            if not actor.is_admin:
+                if len(chosen) > settings.AUDIT_MAX_HOSTS_CLIENT:
+                    raise errors.RequestError(
+                        msg=f'{settings.AUDIT_MAX_HOSTS_CLIENT} sous-domaines maximum par audit.')
+                stashed_token, stashed = await _peek_audit_opts(pk)
+                needs_approval = bool((stashed or {}).get('request_active'))
+                per_host = scan_cost(scan.profile) + (settings.CREDITS_ACTIVE_SURCHARGE if needs_approval else 0)
+                await credit_service.charge_amount(
+                    db, actor, scan, per_host * len(chosen),
+                    f"l'audit de {len(chosen)} sous-domaine(s) ({per_host} crédit(s) chacun)")
             await scan_asset_dao.set_selection(db, pk, chosen)
-            await scan_dao.update(db, pk, {'status': ScanStatus.queued.value})
+            if needs_approval:
+                scan.status = ScanStatus.awaiting_approval.value
+                scan.allow_active_exploitation = True
+                scan.scope_note = (stashed or {}).get('scope_note')
+            else:
+                scan.status = ScanStatus.queued.value
+            hosts = [a.host for a in assets if a.id in chosen]
+            requester = await db.scalar(select(User.email).where(User.id == actor.id))
+        if needs_approval:
+            await publish_progress(pk, 'awaiting_approval', status='awaiting_approval',
+                                   message='Tests actifs OWASP : en attente de validation par un administrateur')
+            await notification_service.notify_admins(
+                kind='audit_request', title='Nouvelle demande audit de domaine (tests actifs)',
+                body=f'Scan #{pk} - {len(hosts)} sous-domaine(s) : {", ".join(hosts[:5])}', link='/admin/requests')
+            from backend.app.shasec.service.otp_service import alert_admins_whatsapp
+            more = '…' if len(hosts) > 8 else ''
+            await alert_admins_whatsapp(
+                "🛡️ Kortex Defender — audit de domaine avec tests actifs OWASP\n"
+                f'Scan #{pk} · client : {requester}\n'
+                f'{len(hosts)} sous-domaine(s) : {", ".join(hosts[:8])}{more}\n'
+                f'Comptes de test fournis : {"oui" if stashed_token else "non (BOLA non testable)"}\n'
+                f'À valider : {settings.PUBLIC_WEB_URL.rstrip("/")}/admin/requests')
+            async with async_db_session() as db:
+                return await scan_dao.get(db, pk)
         auth_token, options = await _pop_audit_opts(pk)
         await _dispatch(pk, auth_token=auth_token, options=options)
         async with async_db_session() as db:

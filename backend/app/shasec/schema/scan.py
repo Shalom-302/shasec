@@ -85,3 +85,17 @@ class GetScanDetails(SchemaBase):
     error: str | None = None
     created_time: datetime
     updated_time: datetime | None = None
+
+
+class ClientAuditParam(SchemaBase):
+    """Self-service whole-domain audit on an authorized target: cartography first
+    (subdomains), then the client picks the subdomains and pays per host."""
+    target_id: int
+    profile: ScanProfile = ScanProfile.standard
+    # Active OWASP tests (XSS/SQLi/CSRF/BOLA…) on the chosen subdomains — only
+    # after admin approval.
+    request_active: bool = False
+    # Test account bearer token, so BOLA/IDOR and access-control tests can run.
+    # Kept in Redis until the scan runs, never stored in the database.
+    auth_token: str | None = None
+    scope_note: str | None = None

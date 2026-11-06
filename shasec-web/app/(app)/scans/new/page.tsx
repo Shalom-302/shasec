@@ -35,6 +35,10 @@ function NewScan() {
   const [targetId, setTargetId] = useState(params.get('target') || '');
   const [profile, setProfile] = useState<ScanProfile>('standard');
   const [advanced, setAdvanced] = useState(false);
+  // 'single' = this URL only; 'domain' = map subdomains, then audit the chosen ones.
+  const [scope, setScope] = useState<'single' | 'domain'>('single');
+  const [testToken, setTestToken] = useState('');
+  const MAP_FEE = 2; // CREDITS_AUDIT_MAP (display only; server bills)
   const [scopeNote, setScopeNote] = useState('');
   const [step, setStep] = useState<'form' | 'confirm'>('form');
   const [busy, setBusy] = useState(false);
@@ -48,7 +52,15 @@ function NewScan() {
   const target = authorized.find(t => String(t.id) === targetId);
   const advCost = (balance?.pricing[profile] ?? 0) + SURCHARGE;
   const advBlocked = !balance?.is_admin && (balance?.credits ?? 0) < advCost;
-  const billing = advanced
+  const perHost = (balance?.pricing[profile] ?? 0) + (advanced ? SURCHARGE : 0);
+  const domainBlocked = !balance?.is_admin && (balance?.credits ?? 0) < MAP_FEE;
+  const billing = scope === 'domain'
+    ? (balance?.is_admin
+        ? { kind: 'admin' as const, text: 'Compte opérateur : non facturé' }
+        : domainBlocked
+          ? { kind: 'blocked' as const, text: `Crédits insuffisants : la cartographie du domaine coûte ${MAP_FEE} crédits.` }
+          : { kind: 'credits' as const, text: `${MAP_FEE} crédits pour découvrir les sous-domaines, puis ${perHost} crédit(s) par sous-domaine que vous choisirez d’auditer${advanced ? ' (tests actifs après validation d’un expert)' : ''}.` })
+    : advanced
     ? (balance?.is_admin
         ? { kind: 'admin' as const, text: 'Compte opérateur : non facturé' }
         : advBlocked
@@ -60,6 +72,15 @@ function NewScan() {
     if (busy || !target) return;
     setBusy(true); setErr('');
     try {
+      if (scope === 'domain') {
+        const audit = await api<Scan>('/scans/domain-audit', {
+          method: 'POST', body: { target_id: target.id, profile, request_active: advanced,
+            auth_token: advanced && testToken.trim() ? testToken.trim() : null, scope_note: scopeNote.trim() || null },
+        });
+        await refreshBalance();
+        router.push(`/scans/${audit.id}`);
+        return;
+      }
       if (advanced) {
         const req = await api<Scan>('/scans/advanced', {
           method: 'POST', body: { target_id: target.id, profile, scope_note: scopeNote.trim() || null },
@@ -115,6 +136,20 @@ function NewScan() {
           </div>
 
           <fieldset>
+            <legend className="label">Portée</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([['single', 'Cette adresse', 'Audit de l’URL de l’application.'],
+                ['domain', 'Tout le domaine', 'Découverte des sous-domaines, puis audit OWASP de chacun de ceux que vous choisissez.']] as const).map(([v, n, h]) => (
+                <label key={v} className={`cursor-pointer rounded-lg border p-3 text-sm ${scope === v ? 'border-kx-accent bg-kx-panel2' : 'border-kx-border'}`}>
+                  <input type="radio" name="scope" value={v} checked={scope === v} onChange={() => setScope(v)} className="sr-only" />
+                  <span className="block font-semibold">{n}</span>
+                  <span className="block text-xs text-kx-muted">{h}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset>
             <legend className="label">Profil</legend>
             <div className="grid gap-2 sm:grid-cols-3">
               {(Object.keys(PROFILE_LABEL) as ScanProfile[]).map(p => {
@@ -149,6 +184,10 @@ function NewScan() {
                 <label className="label" htmlFor="scope">Périmètre / justification (transmis à l’administrateur)</label>
                 <textarea id="scope" className="input min-h-20" value={scopeNote} onChange={e => setScopeNote(e.target.value)}
                   maxLength={2000} placeholder="Ex. : application interne de mon entreprise, autorisation du responsable technique…" />
+                <label className="label mt-3" htmlFor="token">Jeton d’un compte de test (facultatif, recommandé)</label>
+                <input id="token" className="input font-mono text-xs" value={testToken} onChange={e => setTestToken(e.target.value)}
+                  autoComplete="off" placeholder="eyJhbGciOi… (Bearer token d’un compte de test, jamais de production)" />
+                <p className="hint">Sans compte de test, BOLA/IDOR et le contrôle d’accès (OWASP A01) ne peuvent pas être vérifiés. Le jeton n’est jamais enregistré en base et n’est utilisé que pendant l’audit.</p>
               </div>
             )}
           </div>
@@ -168,6 +207,7 @@ function NewScan() {
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4"><dt className="text-kx-muted">Application</dt><dd className="text-right">{target?.name}<br /><span className="font-mono text-xs text-kx-muted">{target?.url}</span></dd></div>
             <div className="flex justify-between gap-4"><dt className="text-kx-muted">Profil</dt><dd>{PROFILE_LABEL[profile].name}{advanced ? ' · audit avancé (tests actifs)' : ''}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-kx-muted">Portée</dt><dd>{scope === 'domain' ? 'Domaine complet (sous-domaines à choisir)' : 'Cette adresse'}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-kx-muted">Facturation</dt><dd className="text-right">{billing.text}</dd></div>
           </dl>
           {advanced && (
@@ -181,7 +221,7 @@ function NewScan() {
             explicite pour l’auditer. En cas d’échec technique, les crédits sont restitués.
           </p>
           <div className="flex gap-2">
-            <button className="btn" onClick={launch} disabled={busy}>{busy ? 'Envoi…' : advanced ? 'Envoyer la demande' : 'Confirmer et lancer'}</button>
+            <button className="btn" onClick={launch} disabled={busy}>{busy ? 'Envoi…' : scope === 'domain' ? 'Lancer la cartographie' : advanced ? 'Envoyer la demande' : 'Confirmer et lancer'}</button>
             <button className="btn-ghost" onClick={() => setStep('form')} disabled={busy}>Modifier</button>
           </div>
         </div>

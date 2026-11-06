@@ -208,6 +208,15 @@ async def run_pipeline(scan_id: int, auth_token: str | None = None, options: dic
                 await publish_progress(scan_id, 'awaiting_scope', status='awaiting_scope',
                                        message='En attente de sélection du périmètre')
                 log.info(f'shasec audit {scan_id} cartography: {len(assets)} host(s), awaiting scope')
+                if scan.owner_id:
+                    try:
+                        from backend.app.shasec.service.notification_service import notification_service
+                        await notification_service.notify_user(
+                            scan.owner_id, kind='scan', title=f'{len(assets)} sous-domaine(s) découvert(s)',
+                            body=f'{alive} actif(s). Choisissez ceux à auditer contre l’OWASP Top 10.',
+                            link=f'/scans/{scan_id}')
+                    except Exception as exc:  # noqa: BLE001 - a notification never fails the scan
+                        log.warning(f'audit {scan_id}: owner notification failed: {exc}')
                 return
 
         # ---- Build the list of hosts to scan (steps 2-4) -----------------------
