@@ -163,6 +163,22 @@ def _build_tools(user_id: int, origin: str, proposed: list[int]):
                             'recommendation': (f.recommendation or '')[:600]} for f in rows], ensure_ascii=False)
 
     @tool
+    async def get_scan_report(scan_id: int) -> str:
+        """Bilan d'un de mes scans : verdict, score OWASP Top 10 (%), couverture par catégorie
+        (vulnérable / sûre / partielle / non testée et pourquoi), preuves vérifiées, sous-domaines."""
+        from backend.app.shasec.service.scan_summary import build_summary
+        async with async_db_session() as db:
+            owner = await db.scalar(select(Scan.owner_id).where(Scan.id == int(scan_id)))
+        if owner != user_id:
+            return 'Scan introuvable.'
+        r = await build_summary(int(scan_id))
+        slim = {'verdict': r['verdict'], 'counts': r['counts'], 'verified': r['verified'], 'owasp': r['owasp'],
+                'coverage': [{k: c[k] for k in ('code', 'name', 'state', 'note', 'worst')} for c in r['coverage']],
+                'top': r['top'][:6], 'hosts': [{k: h.get(k) for k in ('host', 'scanned', 'counts')} for h in r['hosts'][:15]],
+                'skipped': r['skipped']}
+        return json.dumps(slim, ensure_ascii=False, default=str)
+
+    @tool
     async def get_balance() -> str:
         """Mon solde de crédits et le coût d'un scan par profil."""
         from backend.app.shasec.service.credit_service import credit_service
@@ -220,7 +236,7 @@ def _build_tools(user_id: int, origin: str, proposed: list[int]):
         Plus cher, plus intrusif : à ne proposer que si c'est justifié. Validation admin obligatoire."""
         return await _propose('advanced_audit', target_id, 'deep', reason, scope_note)
 
-    return [list_targets, list_scans, get_findings, get_balance, list_my_actions,
+    return [list_targets, list_scans, get_findings, get_scan_report, get_balance, list_my_actions,
             propose_scan, propose_advanced_audit]
 
 
