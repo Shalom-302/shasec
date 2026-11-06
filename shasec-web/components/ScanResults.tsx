@@ -14,6 +14,8 @@ type Coverage = {
 type Host = {
   host: string; kind?: string | null; title?: string | null; scanned: boolean;
   counts: Record<string, number>; top: string[]; third_party?: string | null;
+  owasp?: { score: number; tested: number; partial: number; vulnerable: number; untested: number };
+  coverage?: { code: string; state: Coverage['state']; worst: string | null; note: string }[];
 };
 type Proof = { id: number; module: string; title: string; severity: string; confirmed: boolean; owasp?: string | null; impact?: string | null; request?: string; response?: string };
 export type ScanSummary = {
@@ -161,6 +163,41 @@ export function ScanResults({ scanId }: { scanId: number | string }) {
               <ul className="mt-1 list-disc pl-5">{d.skipped.map(x => <li key={x.module}><b>{x.module}</b> : {x.reason}</li>)}</ul>
             </div>
           )}
+        </section>
+      )}
+
+      {/* Per-subdomain OWASP matrix (domain audit) */}
+      {d.hosts.some(h => h.coverage) && (
+        <section className="card mt-6">
+          <h2 className="card-title">OWASP Top 10 par sous-domaine</h2>
+          <div className="overflow-x-auto">
+            <table className="table text-center">
+              <thead>
+                <tr>
+                  <th className="text-left">Sous-domaine</th>
+                  <th>Score</th>
+                  {d.coverage.map(c => <th key={c.code} title={c.name}>{c.code}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {d.hosts.filter(h => h.coverage).map(h => (
+                  <tr key={h.host}>
+                    <td className="text-left font-mono text-xs">{h.host}</td>
+                    <td className={`font-bold ${scoreColor(h.owasp!.score)}`}>{h.owasp!.score}%</td>
+                    {h.coverage!.map(c => (
+                      <td key={c.code} title={`${c.code} — ${STATE[c.state].label}. ${c.note}`}>
+                        <span className={`inline-block min-w-8 rounded-md px-1.5 py-0.5 text-xs font-semibold ${
+                          c.state === 'vulnerable' && (c.worst === 'critical' || c.worst === 'high') ? 'bg-red-600 text-white' : STATE[c.state].cls}`}>
+                          {STATE[c.state].icon}
+                        </span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-kx-muted">✗ vulnérable (rouge plein : critique/élevée) · ✓ testé, rien trouvé · ◐ partiellement testé · – non testé. Survolez une case pour le détail.</p>
         </section>
       )}
 

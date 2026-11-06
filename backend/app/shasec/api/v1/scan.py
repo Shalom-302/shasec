@@ -7,7 +7,7 @@ from fastapi_limiter.depends import RateLimiter
 from backend.app.shasec.schema.ai_analysis import GetAIAnalysisDetails
 from backend.app.shasec.schema.finding import GetFindingDetails
 from backend.app.shasec.schema.report import GetReportDetails
-from backend.app.shasec.schema.scan import AdvancedScanParam, AuditScanParam, CreateScanParam, GetScanDetails, QuickScanParam, ReviewParam
+from backend.app.shasec.schema.scan import AdvancedScanParam, AuditScanParam, ClientAuditParam, CreateScanParam, GetScanDetails, QuickScanParam, ReviewParam
 from backend.app.shasec.schema.scan_asset import GetScanAssetDetails, SelectAssetsParam
 from backend.app.shasec.service.finding_service import finding_service
 from backend.app.shasec.service.progress import channel as progress_channel
@@ -111,12 +111,31 @@ async def start_domain_audit(request: Request, obj: AuditScanParam) -> ResponseM
     return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
 
 
+@router.post('/domain-audit', summary='[client] Whole-domain audit: subdomains, then per-host OWASP tests',
+             dependencies=[DependsJwtAuth, Depends(RateLimiter(times=5, minutes=10))])
+async def start_client_domain_audit(request: Request, obj: ClientAuditParam) -> ResponseModel:
+    scan = await scan_service.client_audit(
+        actor=actor_from(request), target_id=obj.target_id, profile=obj.profile,
+        request_active=obj.request_active, auth_token=obj.auth_token, scope_note=obj.scope_note)
+    return response_base.success(request=request, data=GetScanDetails(**select_as_dict(scan)))
+
+
 @router.get('/{pk}/assets', summary='Discovered hosts of a domain audit (cartography)',
             dependencies=[DependsJwtAuth])
 async def get_scan_assets(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
     assets = await scan_service.assets(actor=actor_from(request), pk=pk)
     data = [GetScanAssetDetails.model_validate(a) for a in assets]
     return response_base.success(request=request, data=data)
+
+
+@router.get('/{pk}/audit-options', summary='Options requested for a domain audit (active tests, test token?)',
+            dependencies=[DependsJwtAuth])
+async def get_audit_options(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    await _owned_scan(request, pk)
+    from backend.app.shasec.service.scan_service import _peek_audit_opts
+    token, opts = await _peek_audit_opts(pk)
+    return response_base.success(request=request, data={
+        'request_active': bool((opts or {}).get('request_active')), 'has_test_token': bool(token)})
 
 
 @router.post('/{pk}/scope', summary='Select in-scope hosts and resume a domain audit',

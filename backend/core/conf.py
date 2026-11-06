@@ -134,6 +134,11 @@ class Settings(BaseSettings):
     CREDITS_COST_FAST: int = 1
     CREDITS_COST_STANDARD: int = 2
     CREDITS_COST_DEEP: int = 4
+    # Client domain audit: a flat fee for the cartography (subdomain discovery),
+    # then the profile price PER selected subdomain (+ active surcharge per host
+    # when active OWASP tests are requested — those need admin approval).
+    CREDITS_AUDIT_MAP: int = 2
+    AUDIT_MAX_HOSTS_CLIENT: int = 15
     # Online payments (MoneyFusion, Mobile Money). The user is sent to the
     # aggregator's checkout page; credits are granted only after a server-to-server
     # verification (never on the webhook's word), exactly once per payment.

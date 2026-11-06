@@ -67,36 +67,13 @@ def _hosts_from_findings(findings: list[Finding], root: str) -> list[dict]:
     return list(hosts.values())
 
 
-async def build_summary(scan_id: int) -> dict:
-    async with async_db_session() as db:
-        scan = await db.get(Scan, scan_id)
-        target = await db.get(Target, scan.target_id)
-        findings = list((await db.scalars(select(Finding).where(Finding.scan_id == scan_id))).all())
-        exploits = list((await db.scalars(select(Exploit).where(Exploit.scan_id == scan_id))).all())
-        assets = list((await db.scalars(select(ScanAsset).where(ScanAsset.scan_id == scan_id))).all())
+def _coverage(real: list, proofs: list, exploits: list, ran_plugins: set, active: bool) -> tuple[list, dict]:
+    """OWASP Top 10 state per category for a set of findings/proofs, plus a score.
 
-    real = [f for f in findings if f.severity != 'info' and f.status != 'false_positive']
-    proofs = [e for e in exploits if not _skipped(e) and e.severity != 'info']
-    confirmed = [e for e in proofs if e.confirmed]
-    sev = Counter(f.severity for f in real) + Counter(e.severity for e in confirmed)
-
-    # ---- verdict
-    if sev['critical'] or any(e.severity in ('critical', 'high') for e in confirmed):
-        verdict = ('critical', 'Risque critique : des failles exploitables ont été trouvées. Corrigez-les en priorité.')
-    elif sev['high']:
-        verdict = ('high', 'Risque élevé : plusieurs failles importantes à corriger rapidement.')
-    elif sev['medium']:
-        verdict = ('medium', 'Risque modéré : pas de faille critique, mais des faiblesses à corriger.')
-    elif sev['low']:
-        verdict = ('low', 'Risque faible : seuls des points d’amélioration ont été relevés.')
-    else:
-        verdict = ('none', 'Aucune faille trouvée sur les tests effectués (voir la couverture ci-dessous).')
-
-    # ---- OWASP coverage
-    ran_plugins = {p.name for p in get_plugins_for(target.type, scan.profile)} | {f.plugin for f in findings}
+    Score: tested & clean = 1, partially tested & clean = 0.5, vulnerable = 0,
+    NOT TESTED = 0 — an untested category is never reported as safe."""
     ran_modules = {e.module for e in exploits if not _skipped(e)}
     skipped_modules = {e.module: (e.impact or e.title) for e in exploits if _skipped(e)}
-    active = bool(scan.allow_active_exploitation)
     coverage = []
     for code, name in OWASP_TOP10.items():
         items_f = [f for f in real if f.owasp == code]
@@ -135,14 +112,47 @@ async def build_summary(scan_id: int) -> dict:
                                     'verified': bool(getattr(x, 'confirmed', False)) or x.status == 'confirmed',
                                     'kind': 'proof' if isinstance(x, Exploit) else 'finding'}
                                    for x in sorted(items_e + items_f, key=lambda y: -_SEV_RANK.get(y.severity, 0))[:8]]})
-
-    # ---- OWASP score: tested & clean = 1, partially tested & clean = 0.5,
-    # vulnerable = 0, NOT TESTED = 0 (an untested category is never "safe").
     points = {'tested': 1.0, 'partial': 0.5}
-    owasp_score = round(100 * sum(points.get(c['state'], 0.0) for c in coverage) / len(coverage))
     tested = sum(1 for c in coverage if c['state'] in ('tested', 'vulnerable'))
     partial_n = sum(1 for c in coverage if c['state'] == 'partial')
     vulnerable_n = sum(1 for c in coverage if c['state'] == 'vulnerable')
+    owasp = {'score': round(100 * sum(points.get(c['state'], 0.0) for c in coverage) / len(coverage)),
+             'tested': tested, 'partial': partial_n, 'vulnerable': vulnerable_n,
+             'untested': len(coverage) - tested - partial_n}
+    return coverage, owasp
+
+
+async def build_summary(scan_id: int) -> dict:
+    async with async_db_session() as db:
+        scan = await db.get(Scan, scan_id)
+        target = await db.get(Target, scan.target_id)
+        findings = list((await db.scalars(select(Finding).where(Finding.scan_id == scan_id))).all())
+        exploits = list((await db.scalars(select(Exploit).where(Exploit.scan_id == scan_id))).all())
+        assets = list((await db.scalars(select(ScanAsset).where(ScanAsset.scan_id == scan_id))).all())
+
+    real = [f for f in findings if f.severity != 'info' and f.status != 'false_positive']
+    proofs = [e for e in exploits if not _skipped(e) and e.severity != 'info']
+    confirmed = [e for e in proofs if e.confirmed]
+    sev = Counter(f.severity for f in real) + Counter(e.severity for e in confirmed)
+
+    # ---- verdict
+    if sev['critical'] or any(e.severity in ('critical', 'high') for e in confirmed):
+        verdict = ('critical', 'Risque critique : des failles exploitables ont été trouvées. Corrigez-les en priorité.')
+    elif sev['high']:
+        verdict = ('high', 'Risque élevé : plusieurs failles importantes à corriger rapidement.')
+    elif sev['medium']:
+        verdict = ('medium', 'Risque modéré : pas de faille critique, mais des faiblesses à corriger.')
+    elif sev['low']:
+        verdict = ('low', 'Risque faible : seuls des points d’amélioration ont été relevés.')
+    else:
+        verdict = ('none', 'Aucune faille trouvée sur les tests effectués (voir la couverture ci-dessous).')
+
+    # ---- OWASP coverage (whole scan)
+    ran_plugins = {p.name for p in get_plugins_for(target.type, scan.profile)} | {f.plugin for f in findings}
+    active = bool(scan.allow_active_exploitation)
+    coverage, owasp = _coverage(real, proofs, exploits, ran_plugins, active)
+    owasp_score, tested, partial_n, vulnerable_n = owasp['score'], owasp['tested'], owasp['partial'], owasp['vulnerable']
+    skipped_modules = {e.module: (e.impact or e.title) for e in exploits if _skipped(e)}
 
     # ---- subdomains
     root = (target.url.split('://', 1)[-1].split('/', 1)[0]).split(':')[0]
@@ -162,6 +172,12 @@ async def build_summary(scan_id: int) -> dict:
             mine_e = proofs
         c = Counter(f.severity for f in mine_f) + Counter(e.severity for e in mine_e if e.confirmed)
         h['scanned'] = bool(assets and h.get('in_scope')) or h['host'] == root
+        if assets and h.get('in_scope'):
+            host_exploits = [e for e in exploits if e.asset_id == h['asset_id']]
+            host_cov, host_owasp = _coverage(mine_f, mine_e, host_exploits, ran_plugins, active)
+            h['owasp'] = host_owasp
+            h['coverage'] = [{'code': c['code'], 'state': c['state'], 'worst': c['worst'], 'note': c['note']}
+                             for c in host_cov]
         h['counts'] = {k: c[k] for k in ('critical', 'high', 'medium', 'low') if c[k]}
         h['top'] = [x.title for x in sorted(mine_f, key=lambda f: -_SEV_RANK.get(f.severity, 0))[:3]]
     hosts.sort(key=lambda h: (not h['scanned'], -sum(_SEV_RANK[k] * 10 + v for k, v in h['counts'].items()), h['host']))
