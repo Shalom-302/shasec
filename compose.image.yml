@@ -74,6 +74,8 @@ services:
       # Referral: % of the referee's purchased credits given to the referrer.
       - REFERRAL_REWARD_PERCENT=${REFERRAL_REWARD_PERCENT:-100}
       - REFERRAL_FIRST_PURCHASE_ONLY=${REFERRAL_FIRST_PURCHASE_ONLY:-false}
+      # Premium agent: daily message cap per account.
+      - AGENT_MAX_MESSAGES_PER_DAY=${AGENT_MAX_MESSAGES_PER_DAY:-40}
       # Public URL of the web console (payment return page + webhook relay).
       - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-https://security.kortex.sbs}
     # Dokploy/Traefik routes the public domain to this container port.
@@ -154,6 +156,12 @@ services:
       - MONEYFUSION_VERIFY_URL=${MONEYFUSION_VERIFY_URL:-https://pay.moneyfusion.net/paiementNotif}
       - PAYMENT_FEE_TOLERANCE=${PAYMENT_FEE_TOLERANCE:-0.06}
       - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-https://security.kortex.sbs}
+      # Premium agent daily autopilot (07:00 UTC) + WhatsApp alerts for its proposals.
+      - AGENT_AUTOPILOT_ENABLED=${AGENT_AUTOPILOT_ENABLED:-true}
+      - GOWA_URL=${GOWA_URL:-}
+      - GOWA_BASIC_USER=${GOWA_BASIC_USER:-}
+      - GOWA_BASIC_PASS=${GOWA_BASIC_PASS:-}
+      - ADMIN_WHATSAPP_NUMBERS=${ADMIN_WHATSAPP_NUMBERS:-}
     # Wrapped in sh -c so a missing 'arq' (stale image) only restart-loops this
     # one container instead of failing `docker compose up` for the whole stack.
     entrypoint: ["sh", "-c", "exec arq backend.app.shasec.worker.WorkerSettings"]
@@ -162,7 +170,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [shasec]
+    networks: [shasec, whatsapp-shared-network]
 
   postgres:
     image: postgres:16-alpine

@@ -60,9 +60,19 @@ async def reconcile_payments(ctx: dict) -> None:
         await payment_service.reconcile()
 
 
+async def agent_autopilot(ctx: dict) -> None:
+    """Daily autonomous review by the premium agent (proposals still need approval)."""
+    from backend.app.shasec.service.agent_service import agent_service
+    await agent_service.autopilot_all()
+
+
 class WorkerSettings:
     functions = [run_scan_job]
-    cron_jobs = [cron(reconcile_payments, minute=set(range(0, 60, 5)), run_at_startup=True)]
+    cron_jobs = [
+        cron(reconcile_payments, minute=set(range(0, 60, 5)), run_at_startup=True),
+        # 07:00 UTC = 07:00 Abidjan.
+        cron(agent_autopilot, hour={7}, minute={0}, timeout=3600),
+    ]
     redis_settings = redis_settings()
     on_startup = recover_interrupted
     max_jobs = max(1, settings.SHASEC_MAX_CONCURRENT_SCANS)

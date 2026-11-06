@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_COOKIE, REFRESH_COOKIE_LOCAL, apiFetch, clearSession, clientIp, publicError, tryRefresh } from '@/lib/server/backend';
 
 const COLLECTIONS = new Set(['targets', 'scans']);
-const ALLOWED = [/^auth\/me$/, /^targets(\/|$)/, /^scans(\/|$)/, /^credits(\/|$)/, /^notifications(\/|$)/, /^security\/proxy(\/|$)/, /^admin\/users(\/|$)/, /^admin\/overview$/, /^hermes\/chat$/, /^payments\/(packs|checkout|me|[A-Za-z0-9]{1,32})$/, /^referrals\/me$/];
+const ALLOWED = [/^auth\/me$/, /^targets(\/|$)/, /^scans(\/|$)/, /^credits(\/|$)/, /^notifications(\/|$)/, /^security\/proxy(\/|$)/, /^admin\/users(\/|$)/, /^admin\/overview$/, /^hermes\/chat$/, /^payments\/(packs|checkout|me|[A-Za-z0-9]{1,32})$/, /^referrals\/me$/, /^agent(\/|$)/];
 
 async function forward(req: NextRequest, parts: string[]) {
   // Dot segments would be normalized by fetch and could escape the allowlist.

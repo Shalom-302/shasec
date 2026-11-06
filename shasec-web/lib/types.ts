@@ -164,6 +164,15 @@ export type PaymentPacks = {
   packs: { id: string; label: string; price: number; credits: number; validity_days?: number | null }[];
 };
 
+export type AgentStatus = { premium: boolean; enabled: boolean; messages_left: number; autopilot: boolean; autopilot_available: boolean };
+export type AgentMessage = { id: number; role: 'user' | 'assistant' | 'system_event'; content: string; origin: string; created_time: string };
+export type AgentMemory = { id: number; kind: 'fact' | 'preference' | 'lesson'; content: string; created_time: string };
+export type AgentAction = {
+  id: number; kind: 'scan' | 'advanced_audit'; target_id: number; target_url?: string | null; user_email?: string | null;
+  reason: string; profile: string; scope_note?: string | null; status: 'pending' | 'executing' | 'executed' | 'rejected' | 'failed';
+  scan_id?: number | null; review_note?: string | null; origin: string; created_time: string;
+};
+
 export type ReferralSummary = {
   code: string;
   link: string;

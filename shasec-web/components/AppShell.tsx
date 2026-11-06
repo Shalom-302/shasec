@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { authCall } from '@/lib/api';
-import { IconCoins, IconGift, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
+import { IconBot, IconCoins, IconGift, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
 import { ActiveScans } from './ActiveScans';
 import { NotificationBell } from './NotificationBell';
 import { useSession } from './SessionProvider';
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/targets', label: 'Mes applications', icon: IconGlobe },
   { href: '/scans', label: 'Scans', icon: IconRadar },
   { href: '/credits', label: 'Crédits & offres', icon: IconCoins },
+  { href: '/agent', label: 'Agent Kortex', icon: IconBot },
   { href: '/parrainage', label: 'Parrainage', icon: IconGift },
   { href: '/settings', label: 'Compte', icon: IconUser },
 ];
@@ -22,6 +23,7 @@ const ADMIN_NAV = [
   { href: '/admin/audit', label: 'Audit de domaine', icon: IconRadar },
   { href: '/admin/hermes', label: 'Hermes (assistant)', icon: IconTerminal },
   { href: '/admin/requests', label: 'Demandes d’audit', icon: IconShield },
+  { href: '/admin/agent', label: 'Actions de l’agent', icon: IconBot },
   { href: '/admin/users', label: 'Utilisateurs', icon: IconUser },
   { href: '/admin/credits', label: 'Crédits & codes', icon: IconCoins },
   { href: '/operator', label: 'Console opérateur', icon: IconTerminal },
