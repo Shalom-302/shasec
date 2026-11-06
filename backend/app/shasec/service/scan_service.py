@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from sqlalchemy import Select
+from sqlalchemy import Select, select
 
 from backend.app.shasec.schema.scan import CreateScanParam
 from backend.app.shasec.schema.target import CreateTargetParam
@@ -20,7 +20,7 @@ from backend.crud.crud_target import target_dao
 from backend.database.db_postgres import async_db_session
 from backend.database.db_redis import redis_client
 from backend.utils.timezone import timezone
-from backend.models import Scan
+from backend.models import Scan, User
 
 # Strong refs to in-flight in-process tasks (the fallback path) so the event loop
 # does not garbage-collect them mid-run.
@@ -223,6 +223,7 @@ class ScanService:
             scan.scope_note = (scope_note or '').strip()[:2000] or None
             await credit_service.charge_scan(db, actor, scan)
             scan_id, host = scan.id, target.url
+            requester = await db.scalar(select(User.email).where(User.id == actor.id))
         await publish_progress(scan_id, 'awaiting_approval', status='awaiting_approval',
                                message='En attente de validation par un administrateur')
         await notification_service.notify_admins(
@@ -230,6 +231,15 @@ class ScanService:
             title='Nouvelle demande audit avance',
             body=f'Scan #{scan_id} - {host} - profil {profile}. En attente de validation.',
             link='/admin/requests',
+        )
+        from backend.app.shasec.service.otp_service import alert_admins_whatsapp
+        note = (scope_note or '').strip()
+        await alert_admins_whatsapp(
+            "🛡️ Kortex Defender — nouvelle demande d'audit avancé\n"
+            f'Scan #{scan_id} · {host}\n'
+            f'Profil : {profile} · Client : {requester or actor.id}\n'
+            + (f'Périmètre : {note[:300]}\n' if note else '')
+            + f'À valider : {settings.PUBLIC_WEB_URL.rstrip("/")}/admin/requests'
         )
         async with async_db_session() as db:
             return await scan_dao.get(db, scan_id)

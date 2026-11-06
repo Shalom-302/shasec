@@ -117,6 +117,28 @@ async def _send_to_any(phone: str, message: str) -> None:
         msg="Ce numéro n’est pas joignable sur WhatsApp. Vérifiez-le (indicatif compris).")
 
 
+def _normalize_phone(raw: str) -> str:
+    digits = ''.join(ch for ch in raw if ch.isdigit())
+    if raw.strip().startswith('+'):
+        return digits
+    if digits.startswith('00'):
+        return digits[2:]
+    if digits.startswith('0'):
+        return settings.PHONE_DEFAULT_COUNTRY_CODE + digits
+    return digits
+
+
+async def alert_admins_whatsapp(message: str) -> None:
+    """Best-effort WhatsApp alert to ADMIN_WHATSAPP_NUMBERS. Never raises: an
+    alert failure must not break the action that triggered it."""
+    for raw in filter(None, (n.strip() for n in settings.ADMIN_WHATSAPP_NUMBERS.split(','))):
+        phone = _normalize_phone(raw)
+        try:
+            await _send_to_any(phone, message)
+        except Exception as exc:  # noqa: BLE001
+            log.warning(f'admin WhatsApp alert to {phone} failed: {getattr(exc, "msg", exc)}')
+
+
 class OtpService:
     @staticmethod
     async def start(email: str, phone: str, purpose: str = 'signup') -> None:
