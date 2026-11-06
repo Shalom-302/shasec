@@ -61,6 +61,8 @@ services:
       - GOWA_URL=${GOWA_URL:-}
       - GOWA_BASIC_USER=${GOWA_BASIC_USER:-}
       - GOWA_BASIC_PASS=${GOWA_BASIC_PASS:-}
+      # WhatsApp alert to these admin numbers on each advanced-audit request (comma-separated).
+      - ADMIN_WHATSAPP_NUMBERS=${ADMIN_WHATSAPP_NUMBERS:-}
       # Password-protected private Swagger (see FASTAPI_PRIVATE_DOCS_PATH).
       - DOCS_BASIC_USER=${DOCS_BASIC_USER:-}
       - DOCS_BASIC_PASSWORD=${DOCS_BASIC_PASSWORD:-}

@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     GOWA_BASIC_USER: str = ''
     GOWA_BASIC_PASS: str = ''
     GOWA_TIMEOUT: int = 20
+    # Admin WhatsApp alerts (via the same gowa): comma-separated numbers that get a
+    # message when a client submits an advanced-audit request. Local CI format is
+    # accepted (0712345678 -> 2250712345678). Empty => in-app notification only.
+    ADMIN_WHATSAPP_NUMBERS: str = ''
 
     # Hermes agent — the NL assistant that drives shasec (scans/findings) for the
     # operator (and, later, premium clients). The backend relays a chat message to
