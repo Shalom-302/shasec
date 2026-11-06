@@ -60,7 +60,7 @@ function PaymentReturn() {
         {p?.status === 'failed' && <p className="alert-err">Le paiement a échoué ou a été annulé. Aucun montant n’a été crédité.</p>}
         {p?.status === 'mismatch' && <p className="alert-err">Le montant reçu ne correspond pas à l’offre. Contactez le support avec la référence <code>{p.x_id}</code>.</p>}
         {p?.status === 'expired' && <p className="alert-err">Ce paiement a expiré. Relancez un achat depuis la page Crédits.</p>}
-        {p && <p className="text-xs text-kx-muted">Référence : <code>{p.x_id}</code> · {p.amount} FCFA · {p.credits} crédits</p>}
+        {p && <p className="text-xs text-kx-muted">Référence : <code>{p.x_id}</code> · {p.amount} FCFA{p.promo_code ? ` (code ${p.promo_code})` : ''} · {p.credits} crédits</p>}
         <Link href="/credits" className="btn inline-block">Retour aux crédits</Link>
       </section>
     </>

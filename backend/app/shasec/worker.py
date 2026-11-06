@@ -60,6 +60,12 @@ async def reconcile_payments(ctx: dict) -> None:
         await payment_service.reconcile()
 
 
+async def affiliate_promote(ctx: dict) -> None:
+    """Pending commissions -> available (hold over + buyer used credits). Never pays."""
+    from backend.app.shasec.service.affiliate_service import affiliate_service
+    await affiliate_service.promote_due()
+
+
 async def agent_autopilot(ctx: dict) -> None:
     """Daily autonomous review by the premium agent (proposals still need approval)."""
     from backend.app.shasec.service.agent_service import agent_service
@@ -72,6 +78,7 @@ class WorkerSettings:
         cron(reconcile_payments, minute=set(range(0, 60, 5)), run_at_startup=True),
         # 07:00 UTC = 07:00 Abidjan.
         cron(agent_autopilot, hour={7}, minute={0}, timeout=3600),
+        cron(affiliate_promote, hour={6}, minute={30}),
     ]
     redis_settings = redis_settings()
     on_startup = recover_interrupted

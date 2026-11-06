@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSession } from '@/components/SessionProvider';
 import { ErrorBox, Loading, Pager, PageHeader } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtDate } from '@/lib/format';
 import { PLANS } from '@/lib/plans';
-import type { CreditGrant, CreditTransaction, Page, Payment, PaymentPacks, ReferralSummary } from '@/lib/types';
+import type { CreditGrant, CreditTransaction, Page, Payment, PaymentPacks, PromoPreview } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -26,15 +26,27 @@ export default function CreditsPage() {
 
   const payInfo = useAsync(() => api<PaymentPacks>('/payments/packs'), []);
   const [payPhone, setPayPhone] = useState('');
-  const referral = useAsync(() => api<ReferralSummary>('/referrals/me'), []);
-  const [sponsor, setSponsor] = useState('');
+  // Promo code: typed here, or pre-filled from a /register?ref=CODE link.
+  const [promo, setPromo] = useState('');
+  const [promoInput, setPromoInput] = useState('');
+  useEffect(() => {
+    try { const saved = localStorage.getItem('kx_promo') || ''; if (saved) { setPromo(saved); setPromoInput(saved); } } catch { /* ignore */ }
+  }, []);
+  const preview = useAsync(() => api<PromoPreview>('/payments/promo', { query: { code: promo || undefined } }), [promo]);
+  const applyPromo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const c = promoInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    setPromo(c);
+    try { c ? localStorage.setItem('kx_promo', c) : localStorage.removeItem('kx_promo'); } catch { /* ignore */ }
+  };
+  const activeCode = preview.data?.valid ? preview.data.code : null;
   const [buying, setBuying] = useState('');
   const [payErr, setPayErr] = useState('');
 
   const buy = async (pack: string) => {
     setBuying(pack); setPayErr('');
     try {
-      const p = await api<Payment>('/payments/checkout', { method: 'POST', body: { pack, phone: payPhone.trim() || undefined, referral_code: sponsor.trim() || undefined } });
+      const p = await api<Payment>('/payments/checkout', { method: 'POST', body: { pack, phone: payPhone.trim() || undefined, promo_code: activeCode && !preview.data?.attached ? activeCode : undefined } });
       if (!p.checkout_url) throw new Error('Lien de paiement indisponible.');
       window.location.href = p.checkout_url;
     } catch (e: any) {
@@ -98,11 +110,22 @@ export default function CreditsPage() {
             <p className="text-sm">Paiement sécurisé par Mobile Money (Orange Money, MTN, Moov, Wave) via MoneyFusion. Les crédits sont ajoutés dès la confirmation du paiement.</p>
             <label className="label" htmlFor="payphone">Numéro Mobile Money (facultatif)</label>
             <input id="payphone" className="input max-w-xs" type="tel" placeholder="Numéro du compte, par défaut" value={payPhone} onChange={e => setPayPhone(e.target.value)} />
-            {referral.data && !referral.data.has_referrer && (
-              <>
-                <label className="label" htmlFor="sponsor">Code parrain (facultatif)</label>
-                <input id="sponsor" className="input max-w-xs font-mono uppercase" placeholder="KX…" maxLength={16} value={sponsor} onChange={e => setSponsor(e.target.value)} autoComplete="off" />
-              </>
+            {preview.data?.attached ? (
+              preview.data.valid
+                ? <p className="alert-ok">Code promo <b className="font-mono">{preview.data.code}</b> actif sur votre compte : -{preview.data.discount_pct} % sur vos achats.</p>
+                : null
+            ) : (
+              <form onSubmit={applyPromo} className="space-y-1">
+                <label className="label" htmlFor="promo">Code promo (facultatif)</label>
+                <div className="flex max-w-md gap-2">
+                  <input id="promo" className="input font-mono uppercase" placeholder="EX. SHALOM" maxLength={16} value={promoInput}
+                    onChange={e => setPromoInput(e.target.value)} autoComplete="off" />
+                  <button className="btn-ghost shrink-0" type="submit">Appliquer</button>
+                </div>
+                {promo && preview.data && (preview.data.valid
+                  ? <p className="text-sm text-teal-800">✓ Code {preview.data.code} : -{preview.data.discount_pct} % appliqué aux offres ci-dessous.</p>
+                  : <p className="text-sm text-red-700">{preview.data.message || 'Code promo inconnu ou inactif.'}</p>)}
+              </form>
             )}
             {payErr && <p className="alert-err" role="alert">{payErr}</p>}
           </div>
@@ -112,7 +135,12 @@ export default function CreditsPage() {
             <div key={p.name} className={`card flex flex-col ${p.highlight ? 'border-kx-accent' : ''}`}>
               <p className="text-xs uppercase tracking-wide text-kx-muted">{p.tag}</p>
               <h3 className="text-lg font-bold">{p.name}</h3>
-              <p className="mb-3 text-xl font-extrabold">{p.price}</p>
+              {p.pack && activeCode && preview.data?.prices[p.pack] ? (
+                <p className="mb-3">
+                  <span className="text-xl font-extrabold">{preview.data.prices[p.pack].toLocaleString('fr-FR')} FCFA</span>
+                  <span className="ml-2 text-sm text-kx-muted line-through">{p.price}</span>
+                </p>
+              ) : <p className="mb-3 text-xl font-extrabold">{p.price}</p>}
               <ul className="mb-4 list-disc space-y-1 pl-4 text-sm text-kx-muted">{p.items.map(i => <li key={i}>{i}</li>)}</ul>
               <p className="mt-auto text-xs text-kx-muted">{p.note}</p>
               {p.pack && payInfo.data?.enabled && !isAdmin && (

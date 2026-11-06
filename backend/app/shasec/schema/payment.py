@@ -10,8 +10,8 @@ class CheckoutParam(SchemaBase):
     pack: str = Field(max_length=32)
     # Mobile Money number that pays; defaults to the account's phone.
     phone: str | None = None
-    # Referral code typed at checkout (only if no referrer is attached yet).
-    referral_code: str | None = Field(default=None, max_length=16)
+    # Promo code (affiliate program) typed at checkout.
+    promo_code: str | None = Field(default=None, max_length=16)
 
     @field_validator('phone')
     @classmethod
@@ -35,6 +35,8 @@ class GetPayment(SchemaBase):
     x_id: str
     pack: str
     amount: int
+    list_price: int | None = None
+    promo_code: str | None = None
     credits: int
     validity_days: int | None = None
     status: str

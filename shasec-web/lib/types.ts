@@ -157,6 +157,8 @@ export type Payment = {
   paid_at?: string | null;
   created_time: string;
   checkout_url?: string;
+  list_price?: number | null;
+  promo_code?: string | null;
 };
 
 export type PaymentPacks = {
@@ -173,14 +175,21 @@ export type AgentAction = {
   scan_id?: number | null; review_note?: string | null; origin: string; created_time: string;
 };
 
-export type ReferralSummary = {
-  code: string;
-  link: string;
-  referees: number;
-  credits_earned: number;
-  reward_percent: number;
-  first_purchase_only: boolean;
+export type AffiliateSummary = {
+  affiliate: null | {
+    code: string; status: 'pending' | 'approved' | 'suspended' | 'rejected'; link: string;
+    discount_pct: number; commission_pct: number; payout_method: string; payout_phone: string; full_name: string;
+  };
   has_referrer: boolean;
+  referees?: number;
+  totals?: { pending: number; available: number; paid: number; rejected: number };
+  commissions?: { id: number; amount: number; status: string; created_time: string; available_at?: string | null; paid_at?: string | null }[];
+  defaults: { discount_pct?: number; commission_pct?: number; hold_days: number; months: number; min_payout: number };
+};
+
+export type PromoPreview = {
+  valid: boolean; attached: boolean; code: string | null; discount_pct: number;
+  prices: Record<string, number>; message?: string | null;
 };
 
 export type CreditGrant = {

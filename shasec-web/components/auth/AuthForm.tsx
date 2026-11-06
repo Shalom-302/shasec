@@ -25,7 +25,7 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
   useEffect(() => {
     const fromUrl = (params.get('ref') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 16);
     try {
-      if (fromUrl) localStorage.setItem('kx_ref', fromUrl);
+      if (fromUrl) { localStorage.setItem('kx_ref', fromUrl); localStorage.setItem('kx_promo', fromUrl.toUpperCase()); }
       setRefCode(fromUrl || localStorage.getItem('kx_ref') || '');
     } catch { setRefCode(fromUrl); }
   }, [params]);
@@ -79,7 +79,7 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
           {isRegister ? 'Créer votre compte' : admin ? 'Console administrateur' : 'Bon retour parmi nous'}
         </h2>
         <p className="mt-1 text-sm text-kx-muted">
-          {isRegister && refCode ? <>Invité avec le code <b className="font-mono">{refCode}</b> · 3 scans de découverte offerts.</>
+          {isRegister && refCode ? <>Code promo <b className="font-mono">{refCode.toUpperCase()}</b> appliqué · 3 scans de découverte offerts.</>
             : isRegister ? '3 scans de découverte offerts à l’inscription.'
             : admin ? 'Accès réservé aux opérateurs Kortex.' : 'Connectez-vous pour suivre vos audits.'}
         </p>
