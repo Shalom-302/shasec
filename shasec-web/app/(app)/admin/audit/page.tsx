@@ -1,5 +1,6 @@
 'use client';
 
+import { urlError } from '@/lib/validate';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import AdminOnly from '@/components/AdminOnly';
@@ -25,6 +26,8 @@ function AuditLauncher() {
   const [err, setErr] = useState('');
 
   const launch = async (e: React.FormEvent) => {
+    const bad = urlError(url, type);
+    if (bad) { e.preventDefault(); setErr(bad); return; }
     e.preventDefault();
     setBusy(true); setErr('');
     try {

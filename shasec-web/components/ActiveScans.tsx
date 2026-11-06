@@ -57,12 +57,16 @@ export function ActiveScans() {
       {active.length > 0 && (
         <Link
           href={active.length === 1 ? `/scans/${active[0].id}` : '/scans'}
-          className="inline-flex items-center gap-2 rounded-full bg-black px-3.5 py-1.5 text-xs font-medium text-white"
+          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-black px-2.5 py-1.5 text-xs font-medium text-white sm:gap-2 sm:px-3.5"
+          aria-label={`${runningCount} scan(s) en cours, ${queuedCount} en file`}
         >
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-          {runningCount > 0 && `${runningCount} scan${runningCount > 1 ? 's' : ''} en cours`}
-          {runningCount > 0 && queuedCount > 0 && ' · '}
-          {queuedCount > 0 && `${queuedCount} en file`}
+          <span className="sm:hidden">{runningCount + queuedCount}</span>
+          <span className="hidden sm:inline">
+            {runningCount > 0 && `${runningCount} scan${runningCount > 1 ? 's' : ''} en cours`}
+            {runningCount > 0 && queuedCount > 0 && ' · '}
+            {queuedCount > 0 && `${queuedCount} en file`}
+          </span>
         </Link>
       )}
       <div className="fixed bottom-4 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2" aria-live="polite">

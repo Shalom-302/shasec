@@ -148,7 +148,7 @@ export default function Landing({ authed }: { authed: boolean }) {
           </nav>
           <div className="ml-auto flex items-center gap-2">
             {authed ? (
-              <Link href="/dashboard" className="btn">Mon tableau de bord <IconArrow className="h-4 w-4" /></Link>
+              <Link href="/dashboard" className="btn whitespace-nowrap"><span className="sm:hidden">Tableau de bord</span><span className="hidden sm:inline">Mon tableau de bord</span> <IconArrow className="h-4 w-4" /></Link>
             ) : (
               <>
                 <Link href="/login" className="hidden rounded-full px-4 py-2 text-sm font-medium hover:bg-kx-panel2 sm:inline-flex">Connexion</Link>
@@ -169,7 +169,7 @@ export default function Landing({ authed }: { authed: boolean }) {
             <p className="hero-fade mb-5 inline-flex items-center gap-2 rounded-full border border-kx-border bg-white px-3.5 py-1.5 text-xs font-medium">
               <span className="h-1.5 w-1.5 rounded-full bg-black" /> Audit de sécurité web & API, en self-service
             </p>
-            <h1 className="font-display text-[2.6rem] font-semibold leading-[1.04] tracking-tight sm:text-6xl lg:text-7xl">
+            <h1 className="break-words font-display text-[2.1rem] font-semibold leading-[1.06] tracking-tight sm:text-6xl lg:text-7xl">
               {HEADLINE.map((w, i) => (
                 <span key={i} className="inline-block overflow-hidden pb-1 align-bottom">
                   <span className={`hero-word inline-block ${i >= 3 ? 'text-zinc-400' : ''}`}>{w}&nbsp;</span>
@@ -181,7 +181,7 @@ export default function Landing({ authed }: { authed: boolean }) {
               en français, quoi corriger en priorité.
             </p>
             <div className="hero-fade mt-8 flex flex-wrap items-center gap-3">
-              <Link href={authed ? '/scans/new' : '/register'} className="btn px-6 py-3 text-base">
+              <Link href={authed ? '/scans/new' : '/register'} className="btn w-full px-5 py-3 text-sm sm:w-auto sm:px-6 sm:text-base">
                 {authed ? 'Lancer un scan' : 'Commencer gratuitement'} <IconArrow className="h-4 w-4" />
               </Link>
               <a href="#fonctionnement" className="btn-ghost px-6 py-3 text-base">Comment ça marche</a>
@@ -233,7 +233,7 @@ export default function Landing({ authed }: { authed: boolean }) {
             { to: 3, suffix: '', label: 'scans offerts à l’inscription' },
           ].map(s => (
             <div key={s.label} className="py-10 text-center sm:px-6">
-              <p className="font-display text-5xl font-semibold"><span className="count" data-to={s.to}>{s.to}</span>{s.suffix}</p>
+              <p className="font-display text-4xl font-semibold sm:text-5xl"><span className="count" data-to={s.to}>{s.to}</span>{s.suffix}</p>
               <p className="mt-2 text-sm text-kx-muted">{s.label}</p>
             </div>
           ))}
@@ -244,7 +244,7 @@ export default function Landing({ authed }: { authed: boolean }) {
       <section id="fonctionnement" className="mx-auto max-w-6xl scroll-mt-24 px-4 py-24 sm:px-8">
         <div className="reveal max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-widest text-kx-muted">Fonctionnement</p>
-          <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Votre premier audit en trois étapes.</h2>
+          <h2 className="mt-3 font-display text-3xl font-semibold sm:text-5xl">Votre premier audit en trois étapes.</h2>
         </div>
         <div className="steps relative mt-14">
           <div className="steps-line absolute left-0 right-0 top-7 hidden h-px bg-black md:block" />
@@ -265,7 +265,7 @@ export default function Landing({ authed }: { authed: boolean }) {
         <div className="mx-auto max-w-6xl px-4 sm:px-8">
           <div className="reveal max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-widest text-white/50">Fonctionnalités</p>
-            <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Tout ce qu’un attaquant regarderait. Avant lui.</h2>
+            <h2 className="mt-3 font-display text-3xl font-semibold sm:text-5xl">Tout ce qu’un attaquant regarderait. Avant lui.</h2>
           </div>
           <div className="features mt-14 grid gap-px overflow-hidden rounded-3xl bg-white/10 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map(f => (
@@ -283,7 +283,7 @@ export default function Landing({ authed }: { authed: boolean }) {
       <section className="report mx-auto grid max-w-6xl items-center gap-14 px-4 py-24 sm:px-8 lg:grid-cols-2">
         <div className="reveal min-w-0">
           <p className="text-sm font-semibold uppercase tracking-widest text-kx-muted">Rapports</p>
-          <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Des résultats que toute l’équipe comprend.</h2>
+          <h2 className="mt-3 font-display text-3xl font-semibold sm:text-5xl">Des résultats que toute l’équipe comprend.</h2>
           <p className="mt-5 text-lg text-kx-muted">
             Les vulnérabilités sont regroupées, classées par gravité et accompagnées d’un correctif concret.
             Téléchargez le rapport détaillé en PDF pour vos équipes ou vos clients.
@@ -329,7 +329,7 @@ export default function Landing({ authed }: { authed: boolean }) {
         <div className="mx-auto max-w-6xl px-4 sm:px-8">
           <div className="reveal mx-auto max-w-2xl text-center">
             <p className="text-sm font-semibold uppercase tracking-widest text-kx-muted">Tarifs</p>
-            <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Payez ce que vous scannez.</h2>
+            <h2 className="mt-3 font-display text-3xl font-semibold sm:text-5xl">Payez ce que vous scannez.</h2>
             <p className="mt-4 text-kx-muted">Commencez gratuitement, puis achetez des crédits ou abonnez-vous pour une surveillance continue.</p>
           </div>
           <div className="plans mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -356,7 +356,7 @@ export default function Landing({ authed }: { authed: boolean }) {
       <section className="cta relative isolate overflow-hidden bg-kx-navy py-28 text-white">
         <Circuit className="cta-circuit pointer-events-none absolute inset-0 -z-10 h-full w-full text-white/10" />
         <div className="reveal mx-auto max-w-3xl px-4 text-center sm:px-8">
-          <h2 className="font-display text-4xl font-semibold sm:text-6xl">Votre surface d’attaque, enfin visible.</h2>
+          <h2 className="font-display text-3xl font-semibold sm:text-6xl">Votre surface d’attaque, enfin visible.</h2>
           <p className="mx-auto mt-5 max-w-xl text-lg text-white/60">Créez votre compte et lancez votre premier scan en quelques minutes.</p>
           <Link href={authed ? '/scans/new' : '/register'} className="mt-9 inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-base font-semibold text-black transition hover:bg-zinc-200">
             {authed ? 'Lancer un scan' : 'Commencer gratuitement'} <IconArrow className="h-4 w-4" />

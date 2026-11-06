@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { BulkBar, RowBox, SelectAllBox, useSelection } from '@/components/bulk';
 import { ScopeAttestation } from '@/components/ScopeAttestation';
+import { UrlField } from '@/components/UrlField';
+import { urlError } from '@/lib/validate';
 import { Empty, ErrorBox, Loading, Pager, PageHeader, TextLink, VerifiedBadge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtDate, TYPE_LABEL } from '@/lib/format';
@@ -38,10 +40,13 @@ export default function TargetsPage() {
   const [formErr, setFormErr] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [attest, setAttest] = useState(false);
+  const [urlTouched, setUrlTouched] = useState(false);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErr('');
+    setUrlTouched(true);
+    if (urlError(url, type)) return;
     setBusy(true);
     try {
       const t = await api<Target>('/targets', { method: 'POST', body: { name: name.trim() || url.trim(), url: url.trim(), type } });
@@ -56,17 +61,15 @@ export default function TargetsPage() {
   };
 
   const form = (
-    <form onSubmit={create} className="card mb-6 space-y-4">
+    <form onSubmit={create} className="card mb-6 space-y-4" noValidate>
       <h2 className="card-title mb-0">Ajouter une application</h2>
       <div className="grid gap-4 md:grid-cols-[1fr_2fr_auto]">
         <div>
           <label className="label" htmlFor="t-name">Nom</label>
           <input id="t-name" className="input" placeholder="Mon site" value={name} onChange={e => setName(e.target.value)} />
         </div>
-        <div>
-          <label className="label" htmlFor="t-url">URL</label>
-          <input id="t-url" className="input" placeholder="https://exemple.com" required value={url} onChange={e => setUrl(e.target.value)} />
-        </div>
+        <UrlField id="t-url" value={url} onChange={setUrl} type={type} showError={urlTouched && !!url.trim()}
+          onBlur={() => setUrlTouched(true)} />
         <div>
           <label className="label" htmlFor="t-type">Type</label>
           <select id="t-type" className="input" value={type} onChange={e => setType(e.target.value as TargetType)}>

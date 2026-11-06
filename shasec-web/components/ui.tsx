@@ -42,12 +42,12 @@ export function Empty({ title, children, action }: { title: string; children?: R
 
 export function PageHeader({ title, sub, actions }: { title: string; sub?: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8 sm:gap-4">
       <div className="min-w-0">
-        <h1 className="font-display text-2xl font-semibold sm:text-3xl">{title}</h1>
-        {sub && <p className="mt-1.5 text-kx-muted">{sub}</p>}
+        <h1 className="break-words font-display text-xl font-semibold sm:text-2xl md:text-3xl">{title}</h1>
+        {sub && <p className="mt-1.5 break-words text-sm text-kx-muted sm:text-base">{sub}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>}
     </div>
   );
 }

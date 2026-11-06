@@ -33,16 +33,18 @@ function CreditPill() {
   const { balance, isAdmin } = useSession();
   if (!balance) return null;
   if (isAdmin) {
-    return <span className="rounded-full bg-black px-3.5 py-1.5 text-xs font-medium text-white">Opérateur · illimité</span>;
+    return <span className="shrink-0 whitespace-nowrap rounded-full bg-black px-2.5 py-1.5 text-xs font-medium text-white sm:px-3.5">Opérateur<span className="hidden sm:inline"> · illimité</span></span>;
   }
   return (
-    <Link href="/credits" className="inline-flex items-center gap-2 rounded-full border border-kx-border bg-white px-3.5 py-1.5 text-xs shadow-sm transition hover:border-black/30">
+    <Link href="/credits" aria-label={`${balance.credits} crédits, ${balance.free_scans} scan(s) gratuit(s)`}
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-kx-border bg-white px-2.5 py-1.5 text-xs shadow-sm transition hover:border-black/30 sm:gap-2 sm:px-3.5">
       <IconCoins className="h-4 w-4 text-kx-muted" />
       <b className="text-kx-text">{balance.credits}</b>
-      <span className="text-kx-muted">crédit{balance.credits > 1 ? 's' : ''}</span>
+      <span className="hidden text-kx-muted sm:inline">crédit{balance.credits > 1 ? 's' : ''}</span>
       {balance.free_scans > 0 && (
-        <span className="rounded-full bg-kx-tealSoft px-2 py-0.5 font-medium text-teal-900">
-          {balance.free_scans} gratuit{balance.free_scans > 1 ? 's' : ''}
+        <span className="rounded-full bg-kx-tealSoft px-1.5 py-0.5 font-medium text-teal-900 max-[359px]:hidden sm:px-2" title={`${balance.free_scans} scan(s) gratuit(s)`}>
+          <span className="sm:hidden">+{balance.free_scans}</span>
+          <span className="hidden sm:inline">{balance.free_scans} gratuit{balance.free_scans > 1 ? 's' : ''}</span>
         </span>
       )}
     </Link>
@@ -114,14 +116,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-kx-border bg-white/85 px-4 py-3 backdrop-blur sm:px-8">
-          <button className="rounded-lg p-2 text-kx-text hover:bg-kx-panel2 lg:hidden" onClick={() => setOpen(true)} aria-label="Ouvrir le menu">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-kx-border bg-white/90 px-3 backdrop-blur sm:h-16 sm:gap-3 sm:px-8">
+          <button className="-ml-1 shrink-0 rounded-lg p-2 text-kx-text hover:bg-kx-panel2 lg:hidden" onClick={() => setOpen(true)} aria-label="Ouvrir le menu">
             <IconMenu />
           </button>
-          <span className="lg:hidden"><Logo /></span>
-          <div className="ml-auto flex items-center gap-2"><ActiveScans /><NotificationBell /><CreditPill /></div>
+          <Link href="/dashboard" className="min-w-0 shrink-0 lg:hidden" aria-label="Accueil"><Logo compact /></Link>
+          <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2"><ActiveScans /><NotificationBell /><CreditPill /></div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-10">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-6 sm:px-8 sm:py-10">{children}</main>
       </div>
     </div>
   );
