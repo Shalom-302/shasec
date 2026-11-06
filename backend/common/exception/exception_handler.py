@@ -42,6 +42,58 @@ def _get_exception_code(status_code: int):
     return code
 
 
+_FIELD_FR = {
+    'url': 'URL', 'email': 'Email', 'password': 'Mot de passe', 'new_password': 'Nouveau mot de passe',
+    'phone': 'Téléphone', 'name': 'Nom', 'code': 'Code', 'profile': 'Profil', 'type': 'Type',
+    'message': 'Message', 'pack': 'Offre', 'target_id': 'Application',
+}
+_TYPE_FR = {
+    'missing': 'ce champ est obligatoire.',
+    'string_too_short': 'trop court.',
+    'string_too_long': 'trop long.',
+    'string_type': 'doit être un texte.',
+    'int_parsing': 'doit être un nombre entier.',
+    'int_type': 'doit être un nombre entier.',
+    'bool_parsing': 'doit être vrai ou faux.',
+    'enum': 'valeur non autorisée.',
+    'literal_error': 'valeur non autorisée.',
+    'greater_than_equal': 'valeur trop petite.',
+    'less_than_equal': 'valeur trop grande.',
+    'too_long': 'trop d’éléments.',
+}
+
+
+def _field_of(error: dict) -> str:
+    loc = [str(x) for x in (error.get('loc') or ()) if str(x) not in ('body', 'query', 'path')]
+    return loc[-1] if loc else ''
+
+
+def _public_validation_message(error: dict) -> str:
+    """One clear French sentence for a validation error.
+
+    Our own validators raise ValueError with a message written for the user:
+    keep it as is (pydantic prefixes it with "Value error, "). Built-in errors
+    get a French wording naming the field. A model-level validator (e.g. the
+    target URL check) reports an empty loc — handled without crashing."""
+    field = _field_of(error)
+    ctx_error = (error.get('ctx') or {}).get('error')
+    if error.get('type') in ('value_error', 'assertion_error') and ctx_error:
+        text = str(ctx_error)
+        for prefix in ('Value error, ', 'Assertion failed, '):
+            if text.startswith(prefix):
+                text = text[len(prefix):]
+        return text
+    if error.get('type') == 'value_error' and error.get('msg', '').startswith('Value error, '):
+        return error['msg'][len('Value error, '):]
+    label = _FIELD_FR.get(field, field)
+    detail = _TYPE_FR.get(error.get('type', ''))
+    if field == 'email' or error.get('type') == 'value_error' and 'email' in str(error.get('msg', '')).lower():
+        return 'Adresse email invalide.'
+    if detail:
+        return f'{label} : {detail}' if label else detail.capitalize()
+    return f'{label} : valeur invalide.' if label else 'Données invalides.'
+
+
 async def _validation_exception_handler(request: Request, e: RequestValidationError | ValidationError):
     """
     Data Validation Exception Handling
@@ -66,17 +118,16 @@ async def _validation_exception_handler(request: Request, e: RequestValidationEr
         errors.append(error)
     error = errors[0]
     if error.get('type') == 'json_invalid':
-        message = 'json parsing failure'
+        message = 'Requête invalide (JSON mal formé).'
     else:
-        error_input = error.get('input')
-        # A model-level validator (e.g. the target URL check) reports an empty
-        # `loc`, so guard the index — otherwise the handler itself crashes (500).
-        loc = error.get('loc') or ()
-        field = str(loc[-1]) if loc else ''
-        error_msg = error.get('msg')
-        message = f'{field} {error_msg} Input:{error_input}'.strip() if settings.ENVIRONMENT == 'dev' else error_msg
-    msg = f'Illegal request parameters: {message}'
-    data = {'errors': errors} if settings.ENVIRONMENT == 'dev' else None
+        message = _public_validation_message(error)
+    # User-facing: a clear French sentence, never "Illegal request parameters" nor
+    # the submitted value. `data.errors` carries {field, msg} so the UI can point
+    # at the right input (no input echo, safe in prod).
+    msg = message
+    data = {'errors': [{'field': _field_of(err), 'msg': _public_validation_message(err)} for err in errors]}
+    if settings.ENVIRONMENT == 'dev':
+        data['raw'] = errors
     content = {
         'code': StandardResponseCode.HTTP_422,
         'msg': msg,

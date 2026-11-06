@@ -54,17 +54,17 @@ class _ValidatedTargetParam(TargetSchemaBase):
 
         if type_value in _URL_TYPES:
             if parsed.scheme not in ('http', 'https'):
-                raise ValueError('url must start with http:// or https://')
+                raise ValueError('URL invalide. Veuillez saisir une URL commençant par https:// ou http://')
             if not parsed.hostname:
-                raise ValueError('url is missing a host')
+                raise ValueError('URL invalide : le nom de domaine est manquant (ex. https://monsite.com).')
             host = parsed.hostname
         else:  # host: accept a bare hostname / IP, or a scheme-prefixed URL
             host = parsed.hostname or raw
 
         if _is_local_host(host):
             raise ValueError(
-                'Local or private targets are not reachable from the deployed scanner. '
-                'Use the shasec CLI agent to audit local targets.'
+                'Les adresses locales ou privées (localhost, 192.168…, 10.…) ne peuvent pas être '
+                'analysées depuis la plateforme. Indiquez une adresse publique.'
             )
 
         self.url = raw

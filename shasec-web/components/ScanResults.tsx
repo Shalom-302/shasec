@@ -55,11 +55,11 @@ export function ScanResults({ scanId }: { scanId: number | string }) {
   return (
     <>
       {/* Verdict + OWASP score */}
-      <section className={`mt-6 rounded-2xl border p-5 ${VERDICT_CLS[d.verdict.level] || VERDICT_CLS.none}`}>
+      <section className={`mt-6 rounded-2xl border p-4 sm:p-5 ${VERDICT_CLS[d.verdict.level] || VERDICT_CLS.none}`}>
         <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide opacity-70">Verdict</p>
-            <p className="mt-1 font-display text-xl font-semibold">{d.verdict.text}</p>
+            <p className="mt-1 font-display text-lg font-semibold sm:text-xl">{d.verdict.text}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-sm">
               {(['critical', 'high', 'medium', 'low'] as const).map(k => (
                 <span key={k} className="rounded-full bg-white/70 px-3 py-1"><b>{d.counts[k]}</b> {SEV_LABEL[k]}</span>
@@ -68,9 +68,9 @@ export function ScanResults({ scanId }: { scanId: number | string }) {
               <span className="rounded-full bg-white/40 px-3 py-1 opacity-80">{d.informational} info. (inventaire)</span>
             </div>
           </div>
-          <div className="rounded-2xl bg-white/80 px-6 py-4 text-center">
+          <div className="rounded-2xl bg-white/80 px-4 py-3 text-center sm:px-6 sm:py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-kx-muted">Score OWASP Top 10</p>
-            <p className={`font-display text-5xl font-bold ${scoreColor(d.owasp.score)}`}>{d.owasp.score}<span className="text-2xl">%</span></p>
+            <p className={`font-display text-4xl font-bold sm:text-5xl ${scoreColor(d.owasp.score)}`}>{d.owasp.score}<span className="text-xl sm:text-2xl">%</span></p>
             <p className="text-xs text-kx-muted">{d.owasp.tested - d.owasp.vulnerable} sûre(s) · {d.owasp.vulnerable} vulnérable(s) · {d.owasp.partial} partielle(s) · {d.owasp.untested} non testée(s)</p>
           </div>
         </div>

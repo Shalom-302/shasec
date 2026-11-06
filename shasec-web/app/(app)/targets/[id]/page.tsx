@@ -1,5 +1,6 @@
 'use client';
 
+import { urlError } from '@/lib/validate';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -46,6 +47,8 @@ export default function TargetDetailPage() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!edit || !target.data) return;
+    const bad = urlError(edit.url, edit.type);
+    if (bad) { setMsg({ ok: false, text: bad }); return; }
     const urlChanged = edit.url.trim() !== target.data.url;
     if (urlChanged && target.data.is_authorized
       && !confirm('Changer l’URL retire l’autorisation de scan : il faudra attester à nouveau. Continuer ?')) return;

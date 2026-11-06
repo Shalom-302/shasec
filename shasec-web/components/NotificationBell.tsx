@@ -60,8 +60,8 @@ export function NotificationBell() {
   };
 
   return (
-    <div className="relative" ref={box}>
-      <button onClick={toggle} className="relative grid h-9 w-9 place-items-center rounded-full border border-kx-border bg-white hover:border-black/30" aria-label="Notifications" aria-expanded={open}>
+    <div className="relative shrink-0" ref={box}>
+      <button onClick={toggle} className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-kx-border bg-white hover:border-black/30" aria-label="Notifications" aria-expanded={open}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
           <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
@@ -72,7 +72,7 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-kx-border bg-white shadow-card">
+        <div className="fixed inset-x-3 top-16 z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-kx-border bg-white shadow-card sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-80">
           <div className="flex items-center justify-between border-b border-kx-border px-4 py-2.5">
             <span className="text-sm font-semibold">Notifications</span>
             {count > 0 && <button className="text-xs text-kx-muted hover:text-black" onClick={markAll}>Tout marquer lu</button>}
