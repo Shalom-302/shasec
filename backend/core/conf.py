@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     HERMES_TOKEN: str = ''
     HERMES_TIMEOUT: int = 180
 
-    # Kortex Security SaaS — accounts, credits and target ownership.
+    # Kortex Defender SaaS — accounts, credits and target ownership.
     # Role given to self-registered accounts. Admins (role "admin") see every
     # tenant's data, are never billed and may use active exploitation.
     REGISTER_DEFAULT_ROLE: str = 'user'
@@ -130,6 +130,30 @@ class Settings(BaseSettings):
     CREDITS_COST_FAST: int = 1
     CREDITS_COST_STANDARD: int = 2
     CREDITS_COST_DEEP: int = 4
+    # Online payments (MoneyFusion, Mobile Money). The user is sent to the
+    # aggregator's checkout page; credits are granted only after a server-to-server
+    # verification (never on the webhook's word), exactly once per payment.
+    # MONEYFUSION_API_URL is the merchant-specific "pay" endpoint from the
+    # MoneyFusion dashboard. Empty => the buy buttons answer "bientôt disponible".
+    MONEYFUSION_API_URL: str = ''
+    MONEYFUSION_VERIFY_URL: str = 'https://pay.moneyfusion.net/paiementNotif'
+    # Public base URL of the web console (return page + webhook relay).
+    PUBLIC_WEB_URL: str = 'https://security.kortex.sbs'
+    # Secret path segment of the webhook URL we hand to MoneyFusion. Not what makes
+    # the webhook safe (the server-side verify does) — it just keeps strangers out.
+    PAYMENT_WEBHOOK_SECRET: str = ''
+    # Share the aggregator may keep (it reports the NET amount): 0.06 = 6 %.
+    PAYMENT_FEE_TOLERANCE: float = 0.06
+    # Server-side price list. The client only sends a pack id, never an amount.
+    # validity_days: None = credits never expire.
+    PAYMENT_PACKS: dict[str, dict] = {
+        'essentiel': {'label': 'Essentiel', 'price': 1000, 'credits': 10, 'validity_days': None, 'source': 'purchase'},
+        'starter': {'label': 'Starter', 'price': 2000, 'credits': 20, 'validity_days': None, 'source': 'purchase'},
+        'premium': {'label': 'Premium (30 jours)', 'price': 5000, 'credits': 60, 'validity_days': 30, 'source': 'subscription'},
+    }
+    # Pending payments older than this are given up on by the reconciler.
+    PAYMENT_PENDING_MAX_HOURS: int = 48
+
     # Version of the terms of use a client must accept to authorize a target
     # (bump it with the terms page in shasec-web/lib/terms.ts).
     TERMS_VERSION: str = '2026-10-23'

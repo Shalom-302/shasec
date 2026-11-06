@@ -21,6 +21,16 @@ class UserBase(SchemaBase):
     profile_image: dict | None = None
     
 
+def password_policy(v: str) -> str:
+    # Public sign-up / reset: enforce the policy server-side (the API is reachable
+    # directly, not only through the web form). >=8 chars, first letter uppercase.
+    if not v or len(v) < 8:
+        raise ValueError('Le mot de passe doit contenir au moins 8 caractères.')
+    if not v[0].isupper():
+        raise ValueError('Le mot de passe doit commencer par une majuscule.')
+    return v
+
+
 class UserLoginSchema(SchemaBase):
     email: EmailStr
     password: str
@@ -37,13 +47,7 @@ class UserRegister(SchemaBase):
     @field_validator('password')
     @classmethod
     def _password_policy(cls, v: str) -> str:
-        # Public sign-up: enforce the policy server-side (the API is reachable
-        # directly, not only through the web form). >=8 chars, first letter uppercase.
-        if not v or len(v) < 8:
-            raise ValueError('Le mot de passe doit contenir au moins 8 caractères.')
-        if not v[0].isupper():
-            raise ValueError('Le mot de passe doit commencer par une majuscule.')
-        return v
+        return password_policy(v)
 
     @field_validator('phone')
     @classmethod
@@ -71,6 +75,21 @@ class VerifyOtpParam(SchemaBase):
 
 class ResendOtpParam(SchemaBase):
     email: EmailStr
+
+
+class ForgotPasswordParam(SchemaBase):
+    email: EmailStr
+
+
+class ResetPasswordParam(SchemaBase):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=8)
+    new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def _password_policy(cls, v: str) -> str:
+        return password_policy(v)
 
 
 class UserUpdate(UserBase):

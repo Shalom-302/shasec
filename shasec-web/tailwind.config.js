@@ -4,7 +4,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Kortex Security palette: white is primary, black secondary.
+        // Kortex Defender palette: white is primary, black secondary.
         // Color is reserved for meaning (severity, verified state).
         kx: {
           bg: '#f7f7f7',        // app canvas

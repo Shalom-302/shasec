@@ -8,14 +8,23 @@ from backend.app.shasec.service.otp_service import otp_service
 from backend.crud.crud_user import user_dao
 from backend.models.user import User
 from backend.app.admin.schema.token import GetLoginToken, GetNewToken
-from backend.app.admin.schema.user import ResendOtpParam, UserLoginSchema, UserRegister, VerifyOtpParam
+from backend.app.admin.schema.user import (
+    ForgotPasswordParam,
+    ResendOtpParam,
+    ResetPasswordParam,
+    UserLoginSchema,
+    UserRegister,
+    VerifyOtpParam,
+)
 from backend.app.admin.service.login_log_service import LoginLogService
 from backend.common.enums import LoginLogStatusType
 from backend.common.exception import errors
+from backend.common.log import log
 from backend.common.security.jwt import (
     create_access_token,
     create_new_token,
     create_refresh_token,
+    get_hash_password,
     get_token,
     jwt_decode,
     password_verify,
@@ -238,6 +247,48 @@ class AuthService:
         await otp_service.start(email=obj.email, phone=user.phone)
         await otp_service.mark_resent(obj.email)
         return {'sent': True}
+
+    @staticmethod
+    async def forgot_password(*, obj: ForgotPasswordParam) -> dict:
+        """Send a reset code to the account's WhatsApp number.
+
+        Always answers the same thing, whether the email exists or not, so the
+        form can't be used to discover who has an account. Accounts without a
+        phone (e.g. the CLI-created admin) use `backend.cli set-password`."""
+        generic = {'sent': True}
+        async with async_db_session() as db:
+            user = await user_dao.get_by_email(db, obj.email)
+        if not user or not user.phone or not user.status:
+            return generic
+        if not await otp_service.can_resend(obj.email, 'reset'):
+            raise errors.ForbiddenError(msg='Patientez un instant avant de redemander un code.')
+        try:
+            await otp_service.start(email=obj.email, phone=user.phone, purpose='reset')
+        except errors.ForbiddenError as exc:
+            # Quota hit is safe to show; "unreachable number" would leak existence.
+            if 'Trop de codes' in str(exc.msg):
+                raise
+            log.warning(f'password reset code not delivered for {obj.email}: {exc.msg}')
+            return generic
+        await otp_service.mark_resent(obj.email, 'reset')
+        return generic
+
+    @staticmethod
+    async def reset_password(*, obj: ResetPasswordParam) -> dict:
+        async with async_db_session.begin() as db:
+            user = await user_dao.get_by_email(db, obj.email)
+            if not user or not user.status:
+                raise errors.ForbiddenError(msg='Code expiré ou introuvable. Demandez un nouveau code.')
+            await otp_service.verify(obj.email, obj.code, 'reset')  # raises on bad/expired code
+            await user_dao.reset_password(db, user.id, get_hash_password(f'{obj.new_password}{user.salt}'))
+            # Proving control of the phone also proves what sign-up OTP proves.
+            user.email_verified = True
+            x_id = user.x_id
+        # Log out every device: whoever had the old password loses access now.
+        await redis_client.delete_prefix(f'{settings.TOKEN_REDIS_PREFIX}:{x_id}:')
+        await redis_client.delete_prefix(f'{settings.TOKEN_REFRESH_REDIS_PREFIX}:{x_id}:')
+        await redis_client.delete_prefix(f'{settings.JWT_USER_REDIS_PREFIX}:{x_id}')
+        return {'reset': True}
 
     @staticmethod
     async def new_token(*, request: Request, response: Response) -> GetNewToken:

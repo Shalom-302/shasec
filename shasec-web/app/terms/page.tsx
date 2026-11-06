@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/icons';
 import { TERMS, TERMS_VERSION } from '@/lib/terms';
 
-export const metadata = { title: 'Conditions d’utilisation · Kortex Security' };
+export const metadata = { title: 'Conditions d’utilisation · Kortex Defender' };
 
 export default function TermsPage() {
   return (

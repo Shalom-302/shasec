@@ -14,6 +14,7 @@ it fails (and refunds) scans left ``running`` by a previous, interrupted worker.
 """
 import asyncio
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from backend.app.shasec.service.orchestrator import ScanFailure, _mark_failed, run_pipeline
@@ -52,8 +53,16 @@ async def recover_interrupted(ctx: dict) -> None:
         await _mark_failed(scan_id, ScanFailure('Scan interrompu (redémarrage du service). Relancez-le.'))
 
 
+async def reconcile_payments(ctx: dict) -> None:
+    """Credit paid MoneyFusion payments whose webhook never arrived."""
+    from backend.app.shasec.service.payment_service import enabled, payment_service
+    if enabled():
+        await payment_service.reconcile()
+
+
 class WorkerSettings:
     functions = [run_scan_job]
+    cron_jobs = [cron(reconcile_payments, minute=set(range(0, 60, 5)), run_at_startup=True)]
     redis_settings = redis_settings()
     on_startup = recover_interrupted
     max_jobs = max(1, settings.SHASEC_MAX_CONCURRENT_SCANS)

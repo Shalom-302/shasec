@@ -92,6 +92,11 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
         <input id="password" className="input" type="password" required minLength={isRegister ? 8 : undefined}
           autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} />
         {isRegister && <p className="hint">Au moins 8 caractères, commençant par une majuscule.</p>}
+        {!isRegister && (
+          <p className="mt-1.5 text-right text-sm">
+            <Link href="/forgot-password" className="text-kx-muted underline-offset-4 hover:text-black hover:underline">Mot de passe oublié ?</Link>
+          </p>
+        )}
       </div>
       {isRegister && (
         <div>

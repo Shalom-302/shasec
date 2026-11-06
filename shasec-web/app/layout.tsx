@@ -6,7 +6,7 @@ const display = Outfit({ subsets: ['latin'], variable: '--font-display', display
 const body = Roboto_Flex({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Kortex Security',
+  title: 'Kortex Defender',
   description: 'Audits de sécurité self-service pour vos sites et API.',
 };
 

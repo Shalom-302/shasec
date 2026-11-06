@@ -66,6 +66,54 @@ async def create_user(email: str, password: str) -> int:
     return 0
 
 
+async def set_password(email: str, password: str) -> int:
+    """Recovery path for a forgotten password (e.g. the admin account, which has
+    no phone so it can't use the WhatsApp reset): set a new password, re-enable
+    the account, mark it verified and kill every open session."""
+    from backend.common.security.jwt import get_hash_password
+    from backend.core.conf import settings
+    from backend.crud.crud_user import user_dao
+    from backend.database.db_postgres import async_db_session
+    from backend.database.db_redis import redis_client
+
+    if len(password) < 8:
+        print('[error] Password must be at least 8 characters.')
+        return 1
+    async with async_db_session.begin() as db:
+        user = await user_dao.get_by_email(db, email)
+        if user is None:
+            print(f'[error] No user with email {email}.')
+            return 1
+        await user_dao.reset_password(db, user.id, get_hash_password(f'{password}{user.salt}'))
+        user.status = True
+        user.email_verified = True
+        x_id = user.x_id
+    # Sessions are keyed by x_id (see common/security/jwt.py).
+    await redis_client.delete_prefix(f'{settings.TOKEN_REDIS_PREFIX}:{x_id}:')
+    await redis_client.delete_prefix(f'{settings.TOKEN_REFRESH_REDIS_PREFIX}:{x_id}:')
+    await redis_client.delete_prefix(f'{settings.JWT_USER_REDIS_PREFIX}:{x_id}')
+    print(f'[ok] Password updated for {email}. Existing sessions were closed.')
+    return 0
+
+
+async def list_admins() -> int:
+    """Print admin accounts (to find the email you forgot)."""
+    from sqlalchemy import select
+
+    from backend.common.enums import Role as RoleEnum
+    from backend.database.db_postgres import async_db_session
+    from backend.models import Role, User
+
+    async with async_db_session() as db:
+        rows = await db.execute(
+            select(User.email, User.status, User.last_login_time)
+            .join(User.roles).where(Role.name == RoleEnum.ADMIN.value)
+        )
+        for email, status, last_login in rows:
+            print(f'{email}\tactive={bool(status)}\tlast_login={last_login}')
+    return 0
+
+
 def storage_init() -> int:
     """Ensure the configured object-storage bucket exists."""
     # Importing the singleton constructs the client, which creates the bucket
@@ -96,9 +144,18 @@ def main() -> int:
     cu.add_argument("--email", required=True, help="User email (login).")
     cu.add_argument("--password", required=True, help="User password.")
 
+    sp = sub.add_parser("set-password", help="Reset a user's password (forgotten admin password)")
+    sp.add_argument("--email", required=True, help="Account email.")
+    sp.add_argument("--password", required=True, help="New password (>= 8 chars).")
+
+    sub.add_parser("list-admins", help="List admin accounts")
     sub.add_parser("storage-init", help="Ensure the object-storage bucket exists")
 
     args = parser.parse_args()
+    if args.command == "set-password":
+        return asyncio.run(set_password(args.email, args.password))
+    if args.command == "list-admins":
+        return asyncio.run(list_admins())
     if args.command == "create-admin":
         return asyncio.run(create_admin(args.email, args.password))
     if args.command == "create-user":
