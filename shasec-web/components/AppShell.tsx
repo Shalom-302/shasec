@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { authCall } from '@/lib/api';
-import { IconCoins, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
+import { IconCoins, IconGift, IconGlobe, IconHome, IconLogout, IconMenu, IconPlus, IconRadar, IconShield, IconTerminal, IconUser, Logo } from './icons';
 import { ActiveScans } from './ActiveScans';
 import { NotificationBell } from './NotificationBell';
 import { useSession } from './SessionProvider';
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/targets', label: 'Mes applications', icon: IconGlobe },
   { href: '/scans', label: 'Scans', icon: IconRadar },
   { href: '/credits', label: 'Crédits & offres', icon: IconCoins },
+  { href: '/parrainage', label: 'Parrainage', icon: IconGift },
   { href: '/settings', label: 'Compte', icon: IconUser },
 ];
 const ADMIN_NAV = [

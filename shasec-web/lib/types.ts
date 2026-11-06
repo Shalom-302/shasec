@@ -164,12 +164,22 @@ export type PaymentPacks = {
   packs: { id: string; label: string; price: number; credits: number; validity_days?: number | null }[];
 };
 
+export type ReferralSummary = {
+  code: string;
+  link: string;
+  referees: number;
+  credits_earned: number;
+  reward_percent: number;
+  first_purchase_only: boolean;
+  has_referrer: boolean;
+};
+
 export type CreditGrant = {
   id: number;
   amount: number;
   remaining: number;
   kind: 'free_scan' | 'credit';
-  source: 'signup' | 'voucher' | 'purchase' | 'subscription' | 'admin';
+  source: 'signup' | 'voucher' | 'purchase' | 'subscription' | 'admin' | 'referral';
   expires_at?: string | null;
   note?: string | null;
   created_time: string;

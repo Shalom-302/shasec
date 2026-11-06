@@ -36,7 +36,8 @@ async def get_packs(request: Request) -> ResponseModel:
 @router.post('/checkout', summary='Start a Mobile Money payment for a pack',
              dependencies=[DependsJwtAuth, Depends(RateLimiter(times=10, minutes=10))])
 async def checkout(request: Request, obj: CheckoutParam) -> ResponseModel:
-    p = await payment_service.create_checkout(user_id=actor_from(request).id, pack_id=obj.pack, phone=obj.phone)
+    p = await payment_service.create_checkout(user_id=actor_from(request).id, pack_id=obj.pack, phone=obj.phone,
+                                             referral_code=obj.referral_code)
     return response_base.success(request=request, data=GetCheckout.model_validate(p))
 
 

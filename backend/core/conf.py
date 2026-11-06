@@ -155,6 +155,11 @@ class Settings(BaseSettings):
         'starter': {'label': 'Starter', 'price': 2000, 'credits': 20, 'validity_days': None, 'source': 'purchase'},
         'premium': {'label': 'Premium (30 jours)', 'price': 5000, 'credits': 60, 'validity_days': 30, 'source': 'subscription'},
     }
+    # Referral program: the referrer gets this % of the credits of each confirmed
+    # purchase made by someone who signed up with their link (100 => buy 10, the
+    # referrer also gets 10). FIRST_PURCHASE_ONLY limits it to the first purchase.
+    REFERRAL_REWARD_PERCENT: int = 100
+    REFERRAL_FIRST_PURCHASE_ONLY: bool = False
     # Pending payments older than this are given up on by the reconciler.
     PAYMENT_PENDING_MAX_HOURS: int = 48
 

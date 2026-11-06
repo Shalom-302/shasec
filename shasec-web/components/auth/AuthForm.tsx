@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Logo } from '@/components/icons';
 import { api, authCall, resendOtp, verifyOtp } from '@/lib/api';
 import type { CreditBalance } from '@/lib/types';
@@ -19,6 +19,16 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
   // When set, we switch to the WhatsApp-code screen for this email.
   const [otpEmail, setOtpEmail] = useState('');
   const isRegister = mode === 'register';
+  // Referral: /register?ref=CODE. Kept in localStorage so it survives a detour
+  // through /login before the visitor finally signs up.
+  const [refCode, setRefCode] = useState('');
+  useEffect(() => {
+    const fromUrl = (params.get('ref') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 16);
+    try {
+      if (fromUrl) localStorage.setItem('kx_ref', fromUrl);
+      setRefCode(fromUrl || localStorage.getItem('kx_ref') || '');
+    } catch { setRefCode(fromUrl); }
+  }, [params]);
 
   const finishLogin = () => {
     const next = params.get('next');
@@ -35,7 +45,8 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
     if (isRegister && !terms) return setErr('Acceptez les conditions d’utilisation pour créer votre compte.');
     setBusy(true);
     try {
-      const res = await authCall(mode, { email, password, phone: phone.trim() });
+      const res = await authCall(mode, { email, password, phone: phone.trim(), referral_code: isRegister && refCode ? refCode : undefined });
+      if (isRegister) { try { localStorage.removeItem('kx_ref'); } catch { /* ignore */ } }
       if (res?.otp_required) { setOtpEmail(res.email || email); setBusy(false); return; }
       if (admin && !(await api<CreditBalance>('/credits/me'))?.is_admin) {
         await authCall('logout').catch(() => null);
@@ -68,7 +79,8 @@ export function AuthForm({ mode, admin = false }: { mode: 'login' | 'register'; 
           {isRegister ? 'Créer votre compte' : admin ? 'Console administrateur' : 'Bon retour parmi nous'}
         </h2>
         <p className="mt-1 text-sm text-kx-muted">
-          {isRegister ? '3 scans de découverte offerts à l’inscription.'
+          {isRegister && refCode ? <>Invité avec le code <b className="font-mono">{refCode}</b> · 3 scans de découverte offerts.</>
+            : isRegister ? '3 scans de découverte offerts à l’inscription.'
             : admin ? 'Accès réservé aux opérateurs Kortex.' : 'Connectez-vous pour suivre vos audits.'}
         </p>
       </div>

@@ -6,11 +6,11 @@ import { ErrorBox, Loading, Pager, PageHeader } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtDate } from '@/lib/format';
 import { PLANS } from '@/lib/plans';
-import type { CreditGrant, CreditTransaction, Page, Payment, PaymentPacks } from '@/lib/types';
+import type { CreditGrant, CreditTransaction, Page, Payment, PaymentPacks, ReferralSummary } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 
 const SOURCE_LABEL: Record<string, string> = {
-  signup: 'Offert à l’inscription', voucher: 'Code crédit', purchase: 'Achat', subscription: 'Abonnement', admin: 'Attribution',
+  signup: 'Offert à l’inscription', voucher: 'Code crédit', purchase: 'Achat', subscription: 'Abonnement', admin: 'Attribution', referral: 'Parrainage',
 };
 const REASON_LABEL: Record<string, string> = { grant: 'Crédit', scan_debit: 'Scan', scan_refund: 'Remboursement' };
 
@@ -26,13 +26,15 @@ export default function CreditsPage() {
 
   const payInfo = useAsync(() => api<PaymentPacks>('/payments/packs'), []);
   const [payPhone, setPayPhone] = useState('');
+  const referral = useAsync(() => api<ReferralSummary>('/referrals/me'), []);
+  const [sponsor, setSponsor] = useState('');
   const [buying, setBuying] = useState('');
   const [payErr, setPayErr] = useState('');
 
   const buy = async (pack: string) => {
     setBuying(pack); setPayErr('');
     try {
-      const p = await api<Payment>('/payments/checkout', { method: 'POST', body: { pack, phone: payPhone.trim() || undefined } });
+      const p = await api<Payment>('/payments/checkout', { method: 'POST', body: { pack, phone: payPhone.trim() || undefined, referral_code: sponsor.trim() || undefined } });
       if (!p.checkout_url) throw new Error('Lien de paiement indisponible.');
       window.location.href = p.checkout_url;
     } catch (e: any) {
@@ -96,6 +98,12 @@ export default function CreditsPage() {
             <p className="text-sm">Paiement sécurisé par Mobile Money (Orange Money, MTN, Moov, Wave) via MoneyFusion. Les crédits sont ajoutés dès la confirmation du paiement.</p>
             <label className="label" htmlFor="payphone">Numéro Mobile Money (facultatif)</label>
             <input id="payphone" className="input max-w-xs" type="tel" placeholder="Numéro du compte, par défaut" value={payPhone} onChange={e => setPayPhone(e.target.value)} />
+            {referral.data && !referral.data.has_referrer && (
+              <>
+                <label className="label" htmlFor="sponsor">Code parrain (facultatif)</label>
+                <input id="sponsor" className="input max-w-xs font-mono uppercase" placeholder="KX…" maxLength={16} value={sponsor} onChange={e => setSponsor(e.target.value)} autoComplete="off" />
+              </>
+            )}
             {payErr && <p className="alert-err" role="alert">{payErr}</p>}
           </div>
         )}
