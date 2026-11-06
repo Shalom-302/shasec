@@ -46,7 +46,7 @@ pousser sur **GHCR**. Au premier push sur `main`, l'image est publiée sous
 3. **Domaines** (onglet *Domains* de l'app compose, un domaine par service) :
    | Service | Port | Rôle |
    |---|---|---|
-   | `web` | **3000** | Console Kortex Security (Next.js) — c'est l'URL publique des clients |
+   | `web` | **3000** | Console Kortex Defender (Next.js) — c'est l'URL publique des clients |
    | `api` | **8000** | API (Swagger, CLI shasec, Hermes). Optionnel pour le web : il joint l'API en interne via `http://api:8000` |
 
    En **HTTP** : décoche *HTTPS* sur le domaine et laisse `WEB_COOKIE_SECURE` à `false`.

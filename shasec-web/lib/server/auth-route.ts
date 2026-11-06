@@ -89,3 +89,28 @@ export async function resendOtp(req: NextRequest) {
   if (!res.ok) return NextResponse.json({ msg: publicError(res.status, json) }, { status: res.status });
   return NextResponse.json({ ok: true });
 }
+
+/** Unauthenticated JSON relay for the password-reset steps. */
+async function relay(req: NextRequest, apiPath: string, fields: string[]) {
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return NextResponse.json({ msg: 'Requête invalide' }, { status: 400 }); }
+  const payload: Record<string, string> = {};
+  for (const f of fields) {
+    const v = String(body?.[f] ?? '').trim();
+    if (!v) return NextResponse.json({ msg: 'Champs requis manquants' }, { status: 400 });
+    payload[f] = v;
+  }
+  const res = await apiFetch(apiPath, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    ip: clientIp(req),
+  }).catch(() => null);
+  if (!res) return NextResponse.json({ msg: 'API injoignable' }, { status: 502 });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) return NextResponse.json({ msg: publicError(res.status, json) }, { status: res.status });
+  return NextResponse.json({ ok: true });
+}
+
+export const forgotPassword = (req: NextRequest) => relay(req, '/auth/password/forgot', ['email']);
+export const resetPassword = (req: NextRequest) => relay(req, '/auth/password/reset', ['email', 'code', 'new_password']);

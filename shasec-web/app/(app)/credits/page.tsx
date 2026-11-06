@@ -6,7 +6,7 @@ import { ErrorBox, Loading, Pager, PageHeader } from '@/components/ui';
 import { api } from '@/lib/api';
 import { fmtDate } from '@/lib/format';
 import { PLANS } from '@/lib/plans';
-import type { CreditGrant, CreditTransaction, Page } from '@/lib/types';
+import type { CreditGrant, CreditTransaction, Page, Payment, PaymentPacks } from '@/lib/types';
 import { useAsync } from '@/lib/useAsync';
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -23,6 +23,23 @@ export default function CreditsPage() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const payInfo = useAsync(() => api<PaymentPacks>('/payments/packs'), []);
+  const [payPhone, setPayPhone] = useState('');
+  const [buying, setBuying] = useState('');
+  const [payErr, setPayErr] = useState('');
+
+  const buy = async (pack: string) => {
+    setBuying(pack); setPayErr('');
+    try {
+      const p = await api<Payment>('/payments/checkout', { method: 'POST', body: { pack, phone: payPhone.trim() || undefined } });
+      if (!p.checkout_url) throw new Error('Lien de paiement indisponible.');
+      window.location.href = p.checkout_url;
+    } catch (e: any) {
+      setPayErr(e.message);
+      setBuying('');
+    }
+  };
 
   const redeem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +88,18 @@ export default function CreditsPage() {
 
       <section className="mt-8">
         <h2 className="mb-1 text-lg font-bold">Offres</h2>
-        <p className="mb-4 alert-info">Paiement en ligne bientôt disponible. En attendant, contactez-nous pour obtenir un code crédit.</p>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {payInfo.data && !payInfo.data.enabled && (
+          <p className="mb-4 alert-info">Paiement en ligne bientôt disponible. En attendant, contactez-nous pour obtenir un code crédit.</p>
+        )}
+        {payInfo.data?.enabled && !isAdmin && (
+          <div className="mb-4 card space-y-2">
+            <p className="text-sm">Paiement sécurisé par Mobile Money (Orange Money, MTN, Moov, Wave) via MoneyFusion. Les crédits sont ajoutés dès la confirmation du paiement.</p>
+            <label className="label" htmlFor="payphone">Numéro Mobile Money (facultatif)</label>
+            <input id="payphone" className="input max-w-xs" type="tel" placeholder="Numéro du compte, par défaut" value={payPhone} onChange={e => setPayPhone(e.target.value)} />
+            {payErr && <p className="alert-err" role="alert">{payErr}</p>}
+          </div>
+        )}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {PLANS.map(p => (
             <div key={p.name} className={`card flex flex-col ${p.highlight ? 'border-kx-accent' : ''}`}>
               <p className="text-xs uppercase tracking-wide text-kx-muted">{p.tag}</p>
@@ -80,6 +107,11 @@ export default function CreditsPage() {
               <p className="mb-3 text-xl font-extrabold">{p.price}</p>
               <ul className="mb-4 list-disc space-y-1 pl-4 text-sm text-kx-muted">{p.items.map(i => <li key={i}>{i}</li>)}</ul>
               <p className="mt-auto text-xs text-kx-muted">{p.note}</p>
+              {p.pack && payInfo.data?.enabled && !isAdmin && (
+                <button className="btn mt-3 w-full" disabled={!!buying} onClick={() => buy(p.pack!)}>
+                  {buying === p.pack ? 'Redirection…' : 'Acheter'}
+                </button>
+              )}
             </div>
           ))}
         </div>

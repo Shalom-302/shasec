@@ -140,7 +140,7 @@ export default function Landing({ authed }: { authed: boolean }) {
       {/* NAV */}
       <header className="nav fixed inset-x-0 top-0 z-50 border-b border-transparent transition-colors duration-300">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:gap-6 sm:px-8">
-          <Link href="/" aria-label="Kortex Security" className="shrink-0"><Logo /></Link>
+          <Link href="/" aria-label="Kortex Defender" className="shrink-0"><Logo /></Link>
           <nav className="ml-6 hidden gap-6 text-sm text-kx-muted md:flex" aria-label="Sections">
             <a href="#fonctionnement" className="hover:text-black">Fonctionnement</a>
             <a href="#fonctionnalites" className="hover:text-black">Fonctionnalités</a>
@@ -177,7 +177,7 @@ export default function Landing({ authed }: { authed: boolean }) {
               ))}
             </h1>
             <p className="hero-fade mt-6 max-w-xl text-lg text-kx-muted">
-              Kortex Security analyse vos sites et vos API, détecte les vulnérabilités et vous explique,
+              Kortex Defender analyse vos sites et vos API, détecte les vulnérabilités et vous explique,
               en français, quoi corriger en priorité.
             </p>
             <div className="hero-fade mt-8 flex flex-wrap items-center gap-3">
@@ -332,7 +332,7 @@ export default function Landing({ authed }: { authed: boolean }) {
             <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Payez ce que vous scannez.</h2>
             <p className="mt-4 text-kx-muted">Commencez gratuitement, puis achetez des crédits ou abonnez-vous pour une surveillance continue.</p>
           </div>
-          <div className="plans mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="plans mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {PLANS.map(p => (
               <div key={p.name} className={`plan flex flex-col rounded-3xl border p-6 ${p.highlight ? 'border-black bg-black text-white shadow-2xl lg:-translate-y-3' : 'border-kx-border bg-white'}`}>
                 <p className={`text-xs font-semibold uppercase tracking-wider ${p.highlight ? 'text-white/60' : 'text-kx-muted'}`}>{p.tag}</p>
@@ -371,7 +371,7 @@ export default function Landing({ authed }: { authed: boolean }) {
             <Link href="/terms" className="hover:text-black">Conditions d’utilisation</Link>
             <Link href="/login" className="hover:text-black">Connexion</Link>
           </nav>
-          <p>© {new Date().getFullYear()} Kortex Security</p>
+          <p>© {new Date().getFullYear()} Kortex Defender</p>
         </div>
       </footer>
     </div>

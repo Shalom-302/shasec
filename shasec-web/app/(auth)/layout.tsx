@@ -16,7 +16,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             Trouvez vos failles <span className="text-white/55">avant les attaquants.</span>
           </h1>
           <p className="mt-5 max-w-md text-lg text-white/70">
-            Kortex Security audite vos applications web et vos API, et vous dit quoi corriger en priorité.
+            Kortex Defender audite vos applications web et vos API, et vous dit quoi corriger en priorité.
           </p>
           <ul className="mt-10 space-y-4">
             {POINTS.map(p => (

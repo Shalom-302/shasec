@@ -64,6 +64,13 @@ services:
       # Password-protected private Swagger (see FASTAPI_PRIVATE_DOCS_PATH).
       - DOCS_BASIC_USER=${DOCS_BASIC_USER:-}
       - DOCS_BASIC_PASSWORD=${DOCS_BASIC_PASSWORD:-}
+      # Online payments (MoneyFusion). Empty MONEYFUSION_API_URL => buy buttons hidden.
+      - MONEYFUSION_API_URL=${MONEYFUSION_API_URL:-}
+      - MONEYFUSION_VERIFY_URL=${MONEYFUSION_VERIFY_URL:-https://pay.moneyfusion.net/paiementNotif}
+      - PAYMENT_WEBHOOK_SECRET=${PAYMENT_WEBHOOK_SECRET:-}
+      - PAYMENT_FEE_TOLERANCE=${PAYMENT_FEE_TOLERANCE:-0.06}
+      # Public URL of the web console (payment return page + webhook relay).
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-https://security.kortex.sbs}
     # Dokploy/Traefik routes the public domain to this container port.
     expose:
       - "8000"
@@ -87,7 +94,7 @@ services:
       # http://shalom-gowa:3080. Create once on the VPS if missing.
       whatsapp-shared-network: {}
 
-  # Kortex Security web console (Next.js, shasec-web/). Talks to the API over the
+  # Kortex Defender web console (Next.js, shasec-web/). Talks to the API over the
   # internal `shasec` network only — the browser never reaches the API directly.
   # In Dokploy, point the public domain at service `web`, port 3000.
   web:
@@ -137,6 +144,11 @@ services:
       - ZAP_ENDPOINT=http://zap:8090
       - ZAP_API_KEY=${ZAP_API_KEY:-shasec-zap}
       - ZAP_ACTIVE_SCAN=${ZAP_ACTIVE_SCAN:-false}
+      # The worker runs the payment reconciler (cron, every 5 min).
+      - MONEYFUSION_API_URL=${MONEYFUSION_API_URL:-}
+      - MONEYFUSION_VERIFY_URL=${MONEYFUSION_VERIFY_URL:-https://pay.moneyfusion.net/paiementNotif}
+      - PAYMENT_FEE_TOLERANCE=${PAYMENT_FEE_TOLERANCE:-0.06}
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_URL:-https://security.kortex.sbs}
     # Wrapped in sh -c so a missing 'arq' (stale image) only restart-loops this
     # one container instead of failing `docker compose up` for the whole stack.
     entrypoint: ["sh", "-c", "exec arq backend.app.shasec.worker.WorkerSettings"]

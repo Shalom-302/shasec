@@ -145,6 +145,25 @@ export type CreditBalance = {
   pricing: { fast: number; standard: number; deep: number; free_profiles: string[] };
 };
 
+export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'mismatch' | 'expired';
+
+export type Payment = {
+  x_id: string;
+  pack: string;
+  amount: number;
+  credits: number;
+  validity_days?: number | null;
+  status: PaymentStatus;
+  paid_at?: string | null;
+  created_time: string;
+  checkout_url?: string;
+};
+
+export type PaymentPacks = {
+  enabled: boolean;
+  packs: { id: string; label: string; price: number; credits: number; validity_days?: number | null }[];
+};
+
 export type CreditGrant = {
   id: number;
   amount: number;

@@ -3,8 +3,10 @@ from fastapi_limiter.depends import RateLimiter
 from starlette.background import BackgroundTasks
 
 from backend.app.admin.schema.user import (
+    ForgotPasswordParam,
     GetCurrentUserInfoDetail,
     ResendOtpParam,
+    ResetPasswordParam,
     # UpdatePasswordParam,
     UserLoginSchema,
     UserRegister,
@@ -61,6 +63,26 @@ async def verify_otp(request: Request, response: Response, obj: VerifyOtpParam) 
 )
 async def resend_otp(request: Request, obj: ResendOtpParam) -> ResponseModel:
     data = await auth_service.resend_otp(request=request, obj=obj)
+    return response_base.success(request=request, data=data)
+
+
+@router.post(
+    '/password/forgot',
+    summary='Send a password-reset code over WhatsApp',
+    dependencies=[Depends(RateLimiter(times=3, minutes=10))],
+)
+async def forgot_password(request: Request, obj: ForgotPasswordParam) -> ResponseModel:
+    data = await auth_service.forgot_password(obj=obj)
+    return response_base.success(request=request, data=data)
+
+
+@router.post(
+    '/password/reset',
+    summary='Set a new password with the WhatsApp reset code',
+    dependencies=[Depends(RateLimiter(times=10, minutes=10))],
+)
+async def reset_password(request: Request, obj: ResetPasswordParam) -> ResponseModel:
+    data = await auth_service.reset_password(obj=obj)
     return response_base.success(request=request, data=data)
 
 

@@ -19,14 +19,14 @@ export const IconArrow = ({ className }: P) => base(<path d="M5 12h14m-6-6 6 6-6
 export const IconLogout = ({ className }: P) => base(<><path d="M15 4h4v16h-4" /><path d="M10 8l-4 4 4 4M6 12h10" /></>, className);
 export const IconMenu = ({ className }: P) => base(<path d="M4 7h16M4 12h16M4 17h16" />, className);
 
-/** Kortex circuit wordmark + "Security", all black (light surfaces only). */
+/** Kortex circuit wordmark + "Defender", all black (light surfaces only). */
 export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   const h = size === 'lg' ? 'h-9' : 'h-7';
   return (
     <span className="inline-flex items-center gap-2.5 text-black">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/kortex-logo.svg" alt="Kortex" className={`${h} w-auto`} />
-      <span className={`font-display font-semibold uppercase tracking-[0.2em] ${size === 'lg' ? 'text-base' : 'text-xs sm:text-sm'}`}>Security</span>
+      <span className={`font-display font-semibold uppercase tracking-[0.2em] ${size === 'lg' ? 'text-base' : 'text-xs sm:text-sm'}`}>Defender</span>
     </span>
   );
 }

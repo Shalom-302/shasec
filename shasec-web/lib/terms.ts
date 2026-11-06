@@ -7,7 +7,7 @@ export const TERMS: { title: string; body: string[] }[] = [
   {
     title: '1. Objet',
     body: [
-      'Kortex Security fournit un service d’audit de sécurité automatisé de sites web, d’API et d’hôtes exposés sur Internet. Ces conditions encadrent l’utilisation de la plateforme.',
+      'Kortex Defender fournit un service d’audit de sécurité automatisé de sites web, d’API et d’hôtes exposés sur Internet. Ces conditions encadrent l’utilisation de la plateforme.',
     ],
   },
   {
@@ -29,13 +29,13 @@ export const TERMS: { title: string; body: string[] }[] = [
     title: '4. Responsabilité de l’utilisateur',
     body: [
       'Vous êtes seul responsable du choix des cibles, de la véracité de votre attestation et de l’usage fait des résultats.',
-      'Vous vous engagez à garantir Kortex Security contre toute réclamation résultant d’un scan lancé sans autorisation valable.',
+      'Vous vous engagez à garantir Kortex Defender contre toute réclamation résultant d’un scan lancé sans autorisation valable.',
     ],
   },
   {
     title: '5. Suspension',
     body: [
-      'Kortex Security peut suspendre un compte, révoquer l’autorisation d’une cible ou refuser un scan en cas de doute sur la légitimité d’une demande, de signalement d’un tiers ou d’usage abusif, sans remboursement des crédits consommés à cette occasion.',
+      'Kortex Defender peut suspendre un compte, révoquer l’autorisation d’une cible ou refuser un scan en cas de doute sur la légitimité d’une demande, de signalement d’un tiers ou d’usage abusif, sans remboursement des crédits consommés à cette occasion.',
     ],
   },
   {

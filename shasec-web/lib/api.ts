@@ -86,6 +86,22 @@ export async function resendOtp(email: string): Promise<void> {
   if (!res.ok) throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`);
 }
 
+async function publicPost(path: string, body: Record<string, string>): Promise<void> {
+  const res = await fetch(path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json: any = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, json?.msg || `Erreur ${res.status}`);
+}
+
+/** Forgotten password, step 1: a code is sent to the account's WhatsApp number. */
+export const forgotPassword = (email: string) => publicPost('/api/auth/forgot-password', { email });
+
+/** Forgotten password, step 2: set the new password with that code. */
+export const resetPassword = (email: string, code: string, new_password: string) =>
+  publicPost('/api/auth/reset-password', { email, code, new_password });
+
 /** Download a binary through the proxy and hand it to the browser as a file. */
 export async function download(path: string, fallbackName: string) {
   const res = await fetch(`/api/k${path}`);

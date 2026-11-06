@@ -1,4 +1,4 @@
-"""WhatsApp sign-up OTP.
+"""WhatsApp OTP (sign-up verification and forgotten-password reset).
 
 A 6-digit code is sent to the user's phone through gowa
 (go-whatsapp-web-multidevice: ``POST {GOWA_URL}/send/message`` with HTTP Basic
@@ -20,12 +20,24 @@ from backend.database.db_redis import redis_client
 _WA_SUFFIX = '@s.whatsapp.net'
 
 
-def _key(email: str) -> str:
-    return f'{settings.OTP_REDIS_PREFIX}:{email.lower()}'
+# Purposes: 'signup' (account verification) and 'reset' (forgotten password).
+# Separate keys so a sign-up code can never be replayed to reset a password.
+_MESSAGES = {
+    'signup': 'Kortex Defender : votre code de vérification est {code}. '
+              'Il expire dans {minutes} minutes. Ne le partagez avec personne.',
+    'reset': 'Kortex Defender : votre code de réinitialisation du mot de passe est {code}. '
+             'Il expire dans {minutes} minutes. Si vous n’avez rien demandé, ignorez ce message.',
+}
 
 
-def _cooldown_key(email: str) -> str:
-    return f'{settings.OTP_REDIS_PREFIX}:cooldown:{email.lower()}'
+def _key(email: str, purpose: str = 'signup') -> str:
+    base = f'{settings.OTP_REDIS_PREFIX}:{email.lower()}'
+    return base if purpose == 'signup' else f'{settings.OTP_REDIS_PREFIX}:{purpose}:{email.lower()}'
+
+
+def _cooldown_key(email: str, purpose: str = 'signup') -> str:
+    base = f'{settings.OTP_REDIS_PREFIX}:cooldown:{email.lower()}'
+    return base if purpose == 'signup' else f'{base}:{purpose}'
 
 
 def _phone_count_key(phone: str) -> str:
@@ -107,41 +119,38 @@ async def _send_to_any(phone: str, message: str) -> None:
 
 class OtpService:
     @staticmethod
-    async def start(email: str, phone: str) -> None:
+    async def start(email: str, phone: str, purpose: str = 'signup') -> None:
         """Generate a code, store it (TTL + fresh attempt counter), send it."""
         await _consume_phone_quota(phone)
         code = _gen_code()
+        key = _key(email, purpose)
         try:
-            await redis_client.hset(_key(email), mapping={'code': code, 'attempts': 0})
-            await redis_client.expire(_key(email), settings.OTP_TTL_SECONDS)
+            await redis_client.hset(key, mapping={'code': code, 'attempts': 0})
+            await redis_client.expire(key, settings.OTP_TTL_SECONDS)
         except Exception as exc:  # noqa: BLE001
             log.error(f'otp store failed for {email}: {exc}')
             raise errors.ServerError(msg="Impossible de générer le code pour le moment.") from exc
         minutes = settings.OTP_TTL_SECONDS // 60
-        await _send_to_any(
-            phone,
-            f'Kortex Security : votre code de vérification est {code}. '
-            f'Il expire dans {minutes} minutes. Ne le partagez avec personne.',
-        )
+        await _send_to_any(phone, _MESSAGES[purpose].format(code=code, minutes=minutes))
 
     @staticmethod
-    async def can_resend(email: str) -> bool:
+    async def can_resend(email: str, purpose: str = 'signup') -> bool:
         try:
-            return not await redis_client.get(_cooldown_key(email))
+            return not await redis_client.get(_cooldown_key(email, purpose))
         except Exception:  # noqa: BLE001
             return True
 
     @staticmethod
-    async def mark_resent(email: str) -> None:
+    async def mark_resent(email: str, purpose: str = 'signup') -> None:
         try:
-            await redis_client.setex(_cooldown_key(email), settings.OTP_RESEND_COOLDOWN_SECONDS, '1')
+            await redis_client.setex(_cooldown_key(email, purpose), settings.OTP_RESEND_COOLDOWN_SECONDS, '1')
         except Exception:  # noqa: BLE001
             pass
 
     @staticmethod
-    async def verify(email: str, code: str) -> bool:
+    async def verify(email: str, code: str, purpose: str = 'signup') -> bool:
         """True if the code matches. Burns the code after too many wrong tries."""
-        key = _key(email)
+        key = _key(email, purpose)
         try:
             data = await redis_client.hgetall(key)
         except Exception as exc:  # noqa: BLE001
