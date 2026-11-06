@@ -177,6 +177,14 @@ async def get_scan_findings(request: Request, pk: Annotated[int, Path(...)]) -> 
     return response_base.success(request=request, data=data)
 
 
+@router.get('/{pk}/summary', summary='Client results: verdict, proofs, OWASP coverage, subdomains',
+            dependencies=[DependsJwtAuth])
+async def get_scan_summary(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
+    await _owned_scan(request, pk)
+    from backend.app.shasec.service.scan_summary import build_summary
+    return response_base.success(request=request, data=await build_summary(pk))
+
+
 @router.get('/{pk}/analysis', summary='Get scan AI analysis', dependencies=[DependsJwtAuth])
 async def get_scan_analysis(request: Request, pk: Annotated[int, Path(...)]) -> ResponseModel:
     await _owned_scan(request, pk)

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScanProgress } from '@/components/ScanProgress';
+import { ScanResults } from '@/components/ScanResults';
 import { ScopePicker } from '@/components/ScopePicker';
 import { ErrorBox, Loading, PageHeader, SeverityBadge, StatusBadge, TextLink } from '@/components/ui';
 import { owaspLabel } from '@/lib/owasp';
@@ -146,6 +147,7 @@ export default function ScanDetailPage() {
           <ScopePicker scanId={s.id} onLaunched={() => { lastStatus.current = undefined; scan.reload(); }} />
         </section>
       )}
+      {status === 'completed' && <ScanResults scanId={s.id} />}
       {status === 'completed' && <AnalysisCard state={analysis} />}
       {done && <FindingsCard state={findings} />}
       {status === 'completed' && <ReportsCard scan={s} />}
@@ -182,7 +184,10 @@ function Block({ title, text }: { title: string; text: string }) {
 
 function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] | null>> }) {
   const [sev, setSev] = useState('');
-  const items = state.data || [];
+  const [showInfo, setShowInfo] = useState(false);
+  const all = state.data || [];
+  const infoCount = all.filter(f => f.severity === 'info').length;
+  const items = showInfo || sev === 'info' ? all : all.filter(f => f.severity !== 'info');
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     items.forEach(f => { c[f.severity] = (c[f.severity] || 0) + 1; });
@@ -192,7 +197,15 @@ function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] |
 
   return (
     <section className="card mt-6">
-      <h2 className="card-title">Vulnérabilités détectées</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="card-title mb-0">Détail des résultats</h2>
+        {infoCount > 0 && (
+          <label className="flex items-center gap-2 text-sm text-kx-muted">
+            <input type="checkbox" checked={showInfo} onChange={e => setShowInfo(e.target.checked)} /> Afficher l’inventaire ({infoCount} info.)
+          </label>
+        )}
+      </div>
+      <div className="mb-3" />
       {state.loading && <Loading />}
       {state.error && <ErrorBox message={state.error} onRetry={state.reload} />}
       {state.data && items.length === 0 && <p className="text-sm text-kx-muted">Aucune vulnérabilité détectée.</p>}
@@ -200,7 +213,7 @@ function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] |
         <>
           <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filtrer par gravité">
             <button className={sev === '' ? 'btn btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSev('')}>Toutes · {items.length}</button>
-            {SEV_ORDER.filter(s => counts[s]).map(s => (
+            {SEV_ORDER.filter(s => counts[s] && (s !== 'info' || showInfo)).map(s => (
               <button key={s} className={sev === s ? 'btn btn-sm' : 'btn-ghost btn-sm'} onClick={() => setSev(s)}>
                 {SEV_FR[s]} · {counts[s]}
               </button>
@@ -212,6 +225,7 @@ function FindingsCard({ state }: { state: ReturnType<typeof useAsync<Finding[] |
                 <summary className="flex cursor-pointer items-center gap-3 px-3 py-2.5">
                   <SeverityBadge severity={g.severity} />
                   <span className="flex-1 font-medium">{g.fr}{g.count > 1 ? ` · ${g.count}×` : ''}</span>
+                  {g.confirmed && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">Vérifiée</span>}
                   {owaspLabel(g.owasp) && <span className="hidden rounded-full bg-kx-panel2 px-2 py-0.5 text-[11px] font-medium text-kx-text sm:inline">{owaspLabel(g.owasp)}</span>}
                   <span className="hidden rounded-full border border-kx-border px-2 py-0.5 text-[11px] text-kx-muted sm:inline">{g.plugin}</span>
                 </summary>

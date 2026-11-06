@@ -5,6 +5,7 @@ export type FindingLike = {
   title: string; severity: string; plugin: string;
   description?: string | null; evidence?: string | null; recommendation?: string | null;
   owasp?: string | null;
+  status?: string | null;
 };
 
 export const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
@@ -104,7 +105,7 @@ export function enrichOf(title: string): Enrich | null {
 // Group identical/similar findings so the list isn't 20× the same HSTS line.
 export type Grouped = {
   key: string; title: string; fr: string; severity: string; plugin: string;
-  count: number; why: string; fix: string; samples: string[]; owasp?: string | null;
+  count: number; why: string; fix: string; samples: string[]; owasp?: string | null; confirmed?: boolean;
 };
 export function groupFindings(items: FindingLike[]): Grouped[] {
   const by: Record<string, Grouped> = {};
@@ -115,10 +116,11 @@ export function groupFindings(items: FindingLike[]): Grouped[] {
       by[key] = {
         key, title: f.title, fr: e ? e.fr : f.title, severity: f.severity, plugin: f.plugin,
         count: 0, why: e ? e.why : (f.description || ''), fix: e ? e.fix : (f.recommendation || ''),
-        samples: [], owasp: f.owasp,
+        samples: [], owasp: f.owasp, confirmed: false,
       };
     }
     by[key].count += 1;
+    if (f.status === 'confirmed') by[key].confirmed = true;
     const ev = f.evidence || (f.title !== by[key].fr ? f.title : '');
     if (ev && by[key].samples.length < 8 && !by[key].samples.includes(ev)) by[key].samples.push(ev);
   }
