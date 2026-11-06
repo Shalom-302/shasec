@@ -45,7 +45,7 @@ def webhook_url() -> str:
 class PaymentService:
     @staticmethod
     async def create_checkout(*, user_id: int, pack_id: str, phone: str | None,
-                              referral_code: str | None = None) -> Payment:
+                              promo_code: str | None = None) -> Payment:
         pack = settings.PAYMENT_PACKS.get(pack_id)
         if not pack:
             raise errors.RequestError(msg='Offre inconnue.')
@@ -57,9 +57,8 @@ class PaymentService:
             phone = phone or (user.phone if user else None)
             if not phone:
                 raise errors.RequestError(msg='Indiquez le numéro Mobile Money qui va payer.')
-            if referral_code:
-                from backend.app.shasec.service.referral_service import referral_service
-                await referral_service.attach(db, referee_id=user_id, code=referral_code, strict=True)
+            from backend.app.shasec.service.affiliate_service import affiliate_service, digits, discounted
+            aff = await affiliate_service.resolve(db, buyer_id=user_id, code=promo_code, payer_phone=phone)
             since = timezone.now() - timedelta(minutes=30)
             recent = await db.scalar(
                 select(Payment.id).where(Payment.user_id == user_id, Payment.status == 'pending',
@@ -70,8 +69,14 @@ class PaymentService:
                 raise errors.ForbiddenError(msg='Trop de paiements en attente. Terminez-en un ou réessayez plus tard.')
 
             # Written BEFORE the user pays: freezes price and credits now.
-            p = Payment(user_id=user_id, pack=pack_id, amount=int(pack['price']),
+            list_price = int(pack['price'])
+            p = Payment(user_id=user_id, pack=pack_id,
+                        amount=discounted(list_price, aff.discount_pct) if aff else list_price,
                         credits=int(pack['credits']), validity_days=pack.get('validity_days'))
+            p.list_price = list_price
+            p.payer_phone = digits(phone)
+            if aff:
+                p.affiliate_id, p.promo_code = aff.id, aff.code
             db.add(p)
             await db.flush()
             try:
@@ -150,8 +155,9 @@ class PaymentService:
                 expires_at=expires_at, external_ref=f'moneyfusion:{reference}',
                 note=f'Achat {pack.get("label", p.pack)} — {p.amount} FCFA',
             )
-            from backend.app.shasec.service.referral_service import referral_service
-            referral = await referral_service.reward(db, p, reference)
+            # Affiliate commission (cash, admin-paid) in the same transaction.
+            from backend.app.shasec.service.affiliate_service import affiliate_service
+            await affiliate_service.on_payment_confirmed(db, p)
         log.info(f'[PAY] user {p.user_id} credited +{p.credits} (…{reference[-6:]})')
 
         from backend.app.shasec.service.notification_service import notification_service
@@ -160,12 +166,6 @@ class PaymentService:
                 p.user_id, kind='account', title=f'Paiement reçu : +{p.credits} crédits',
                 body=f'{p.amount} FCFA — merci !', link='/credits',
             )
-            if referral:
-                await notification_service.notify_user(
-                    referral[0], kind='account', title=f'Parrainage : +{referral[1]} crédits',
-                    body='Un de vos filleuls vient d’acheter des crédits. Merci de faire connaître Kortex Defender !',
-                    link='/parrainage',
-                )
         except Exception as exc:  # noqa: BLE001 - the credit is what matters
             log.warning(f'[PAY] notification failed: {exc}')
         return 'paid'

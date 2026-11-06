@@ -36,3 +36,11 @@ class Payment(Base):
     checkout_url: Mapped[str | None] = mapped_column(sa.String(1024), default=None)
     paid_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), default=None)
     note: Mapped[str | None] = mapped_column(sa.String(255), default=None)
+    # Promo code (affiliate program): amount above is what the buyer pays;
+    # list_price is the pack's normal price the commission is computed on.
+    list_price: Mapped[int | None] = mapped_column(sa.Integer, default=None)
+    promo_code: Mapped[str | None] = mapped_column(sa.String(16), default=None)
+    affiliate_id: Mapped[int | None] = mapped_column(
+        sa.ForeignKey('affiliate.id', ondelete='SET NULL'), default=None, index=True)
+    # Mobile Money number that paid (anti self-referral, fraud review).
+    payer_phone: Mapped[str | None] = mapped_column(sa.String(20), default=None, index=True)

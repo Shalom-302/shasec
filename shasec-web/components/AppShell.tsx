@@ -26,6 +26,7 @@ const ADMIN_NAV = [
   { href: '/admin/agent', label: 'Actions de l’agent', icon: IconBot },
   { href: '/admin/users', label: 'Utilisateurs', icon: IconUser },
   { href: '/admin/credits', label: 'Crédits & codes', icon: IconCoins },
+  { href: '/admin/affiliates', label: 'Parrains & versements', icon: IconGift },
   { href: '/operator', label: 'Console opérateur', icon: IconTerminal },
 ];
 

@@ -69,8 +69,8 @@ class AuthService:
             # Kortex free tier: one-shot discovery scans, granted once per account.
             await credit_service.grant_signup(db, new_user.id)
             if obj.referral_code:
-                from backend.app.shasec.service.referral_service import referral_service
-                await referral_service.attach(db, referee_id=new_user.id, code=obj.referral_code, strict=False)
+                from backend.app.shasec.service.affiliate_service import affiliate_service
+                await affiliate_service.attach_on_signup(db, referee_id=new_user.id, code=obj.referral_code)
 
             # WhatsApp OTP gate: create the account UNVERIFIED, send the code, and
             # return without tokens — the user logs in only after /auth/verify-otp.

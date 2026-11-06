@@ -37,8 +37,15 @@ async def get_packs(request: Request) -> ResponseModel:
              dependencies=[DependsJwtAuth, Depends(RateLimiter(times=10, minutes=10))])
 async def checkout(request: Request, obj: CheckoutParam) -> ResponseModel:
     p = await payment_service.create_checkout(user_id=actor_from(request).id, pack_id=obj.pack, phone=obj.phone,
-                                             referral_code=obj.referral_code)
+                                             promo_code=obj.promo_code)
     return response_base.success(request=request, data=GetCheckout.model_validate(p))
+
+
+@router.get('/promo', summary='Price preview with a promo code', dependencies=[DependsJwtAuth])
+async def promo_preview(request: Request, code: str | None = None) -> ResponseModel:
+    from backend.app.shasec.service.affiliate_service import affiliate_service
+    data = await affiliate_service.preview(buyer_id=actor_from(request).id, code=code)
+    return response_base.success(request=request, data=data)
 
 
 @router.get('/me', summary='My payments', dependencies=[DependsJwtAuth])

@@ -167,11 +167,17 @@ class Settings(BaseSettings):
     AGENT_PREMIUM_DAYS: int = 30
     AGENT_MAX_MESSAGES_PER_DAY: int = 40
     AGENT_AUTOPILOT_ENABLED: bool = True
-    # Referral program: the referrer gets this % of the credits of each confirmed
-    # purchase made by someone who signed up with their link (100 => buy 10, the
-    # referrer also gets 10). FIRST_PURCHASE_ONLY limits it to the first purchase.
-    REFERRAL_REWARD_PERCENT: int = 100
-    REFERRAL_FIRST_PURCHASE_ONLY: bool = False
+    # Affiliate program (promo codes). Buyer gets DISCOUNT % off the list price;
+    # the affiliate earns COMMISSION % of the list price in CASH, paid by the admin
+    # by hand: commissions wait HOLD_DAYS and need real credit usage before they
+    # become "available", and are only ever marked paid by an admin. Defaults per
+    # new affiliate; the admin can change the rates per code when approving.
+    AFFILIATE_DEFAULT_DISCOUNT_PCT: int = 30
+    AFFILIATE_DEFAULT_COMMISSION_PCT: int = 20
+    AFFILIATE_COMMISSION_MONTHS: int = 12
+    AFFILIATE_HOLD_DAYS: int = 14
+    AFFILIATE_MIN_PAYOUT: int = 2000
+    AFFILIATE_MONTHLY_CAP: int = 100000
     # Pending payments older than this are given up on by the reconciler.
     PAYMENT_PENDING_MAX_HOURS: int = 48
 
