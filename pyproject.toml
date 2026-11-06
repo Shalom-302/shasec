@@ -57,6 +57,8 @@ dependencies = [
     "loguru>=0.7.2",
     # IANA time zone database (zoneinfo has no data on Windows / slim images)
     "tzdata>=2024.1",
+    "langgraph>=0.6",
+    "langchain-openai>=0.3",
 ]
 
 # Opt-in observability stack. Install with: uv sync --extra monitoring

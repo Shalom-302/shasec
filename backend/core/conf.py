@@ -155,6 +155,13 @@ class Settings(BaseSettings):
         'starter': {'label': 'Starter', 'price': 2000, 'credits': 20, 'validity_days': None, 'source': 'purchase'},
         'premium': {'label': 'Premium (30 jours)', 'price': 5000, 'credits': 60, 'validity_days': 30, 'source': 'subscription'},
     }
+    # Premium LangGraph agent (DeepSeek). Available to accounts that paid one of
+    # AGENT_PACKS in the last AGENT_PREMIUM_DAYS days (admins always). Every action
+    # it proposes needs admin approval. Autopilot = one autonomous review per day.
+    AGENT_PACKS: list[str] = ['premium']
+    AGENT_PREMIUM_DAYS: int = 30
+    AGENT_MAX_MESSAGES_PER_DAY: int = 40
+    AGENT_AUTOPILOT_ENABLED: bool = True
     # Referral program: the referrer gets this % of the credits of each confirmed
     # purchase made by someone who signed up with their link (100 => buy 10, the
     # referrer also gets 10). FIRST_PURCHASE_ONLY limits it to the first purchase.
